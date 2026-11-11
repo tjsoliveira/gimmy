@@ -1,0 +1,54 @@
+name: Build IPA
+
+# Builds an unsigned Gimmy.ipa. Sideloadly / AltStore sign it with your Apple ID at install time.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Write Config/Secrets.xcconfig
+        env:
+          APP_BUNDLE_ID: ${{ secrets.APP_BUNDLE_ID }}
+          GOOGLE_CLIENT_ID_PREFIX: ${{ secrets.GOOGLE_CLIENT_ID_PREFIX }}
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+        run: |
+          {
+            [ -n "$APP_BUNDLE_ID" ] && echo "APP_BUNDLE_ID = $APP_BUNDLE_ID"
+            echo "GOOGLE_CLIENT_ID_PREFIX = $GOOGLE_CLIENT_ID_PREFIX"
+            echo "SPREADSHEET_ID = $SPREADSHEET_ID"
+          } > Config/Secrets.xcconfig
+
+      - name: Generate project
+        run: xcodegen generate
+
+      - name: Build
+        run: |
+          xcodebuild build \
+            -project Gimmy.xcodeproj \
+            -scheme Gimmy \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+
+      - name: Package IPA
+        run: |
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/Gimmy.app Payload/
+          zip -qr Gimmy.ipa Payload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Gimmy-ipa
+          path: Gimmy.ipa
+          retention-days: 30
