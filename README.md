@@ -7,21 +7,29 @@ App de iPhone para registrar treinos. É a versão nativa (SwiftUI) do artefato 
 
 ## O que tem no app
 
-- **Treino**: escolhe rotina e data, monta o treino a partir do último treino daquela rotina (ou da aba Rotinas), registra cada série (carga, reps, tipo, unidade, descanso), adiciona série e exercício, e finaliza com a duração.
-- **Descanso**: depois de registrar uma série, o relógio de descanso aparece em baixo. Quando chega no alvo da aba Rotinas (padrão 1:30), o iPhone avisa com notificação e som, mesmo bloqueado.
+- **Treino**: escolhe o treino (o seletor só mostra os vigentes na data) e a data. Num dia sem treino, Começar treino cria uma cópia do treino configurado, com exercícios, tipos de série e reps, e só as cargas em branco. Registra cada série (carga, reps, tipo, unidade, descanso), adiciona série e exercício, e finaliza com a duração.
+- **Descanso**: depois de registrar uma série, o relógio de descanso aparece em baixo. Quando chega no alvo do exercício (padrão 1:30), o iPhone avisa com notificação e som, mesmo bloqueado.
 - **Histórico**: treinos por mês, com volume e variação contra o treino anterior, exercícios que subiram ou caíram e recordes. Dá para abrir um treino antigo para editar.
+- **Configurar**: cria e edita os treinos. Cada treino tem nome e vigência (início e fim; o atual fica sem fim), uma lista de exercícios em ordem e, em cada exercício, as séries (tipo e reps), o descanso alvo, a unidade e as notas. Um nome pode voltar com outra vigência (um plano novo de Costas, por exemplo) sem misturar com o antigo.
 
 As regras de cálculo são as mesmas do artefato: numeração de séries com drop e rest-pause (3.1, 3.2), descanso curto dentro da sequência (10 s depois de drop, 15 s depois de rest-pause), 1RM estimado (Brzycki até 10 reps, Epley acima), volume em kg sem aquecimento, recorde só quando o exercício também subiu.
 
 ## Como a planilha é usada
 
-O app usa as abas e colunas que já existem. Nada novo é criado.
+O app usa as abas que já existem. Na aba Rotinas ele acrescenta três colunas no fim (J, K e L), sem mexer nas outras.
 
 | Aba | O app lê | O app grava |
 |---|---|---|
 | Registro | A–Q | A–F ao montar treino ou adicionar séries/exercícios (insere linhas), D–F ao salvar série, P (descanso), Q (duração) |
-| Rotinas | A–I | nada |
+| Rotinas | A–L | pela aba Configurar: A–C, F–L (D e E têm fórmulas e nunca são gravadas); insere e apaga linhas |
 | Exercícios | A–D | D (unidade kg/lb), ou uma linha nova para exercício novo |
+
+Na aba Rotinas, cada linha é um exercício de um treino:
+
+- **G (Reps)** tem uma rep por série, na ordem: `12-10-8-6-8`.
+- **J (Tipos)** tem o tipo de cada série, na mesma ordem: `Aquecimento, Normal, Normal, Drop, Normal`. Linhas sem J (as antigas) continuam valendo: o app copia as séries do último treino daquele exercício, ou usa F e G.
+- **K (Início)** e **L (Fim)** são a vigência do treino, repetidas em todas as linhas dele. L vazio é o treino atual; K e L vazios valem sempre. Linhas com o mesmo nome e o mesmo início formam um treino.
+- Um treino sem exercícios fica guardado numa linha só com nome e datas.
 
 Antes de gravar numa linha, o app confere se ela ainda tem o que ele espera. Se a planilha mudou (por exemplo, você editou no computador), ele recarrega e pede para conferir.
 
@@ -90,7 +98,7 @@ No Sideloadly, deixe o Bundle ID como está (o mesmo registrado no cliente iOS d
 Gimmy/
   App/        entrada do app e configuração
   Google/     login OAuth (PKCE, Keychain) e cliente da API do Sheets
-  Model/      regras de treino (Ledger), estado e ações (AppModel), aviso de descanso
+  Model/      regras de treino (Ledger), treinos configurados e vigência (Plan), estado e ações (AppModel), aviso de descanso
   Views/      telas SwiftUI
   Resources/  Info.plist, ícone e cor de destaque
 GimmyTests/   testes unitários das regras de treino (rodam no GitHub antes de gerar o IPA)

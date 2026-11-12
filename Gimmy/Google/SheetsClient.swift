@@ -25,6 +25,9 @@ enum OutCell: Encodable, Sendable {
 
     static let blank = OutCell.text("")
 
+    /// Free text that must stay text: "10-10-10" or "1/12" would otherwise become dates, "=x" a formula.
+    static func literal(_ value: String) -> OutCell { value.isEmpty ? .blank : .text("'" + value) }
+
     func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
         switch self {
@@ -111,22 +114,60 @@ final class SheetsClient {
         )
     }
 
+    /// Writes several ranges in one request.
+    func update(_ ranges: [(range: String, rows: [[OutCell]])]) async throws {
+        struct ValueRange: Encodable { let range: String; let majorDimension = "ROWS"; let values: [[OutCell]] }
+        struct Body: Encodable { let valueInputOption = "USER_ENTERED"; let data: [ValueRange] }
+        guard !ranges.isEmpty else { return }
+        _ = try await send(
+            method: "POST",
+            path: "values:batchUpdate",
+            query: [],
+            body: try JSONEncoder().encode(Body(data: ranges.map { ValueRange(range: $0.range, values: $0.rows) })),
+            idempotent: false
+        )
+    }
+
     /// Deletes 1-based row `row`.
     func deleteRow(sheetID: Int, row: Int) async throws {
-        let body: [String: Any] = [
-            "requests": [[
-                "deleteDimension": [
-                    "range": ["sheetId": sheetID, "dimension": "ROWS", "startIndex": row - 1, "endIndex": row],
-                ],
-            ]],
-        ]
+        try await deleteRows(sheetID: sheetID, rows: [row])
+    }
+
+    /// Deletes several 1-based rows in one request, bottom first so the numbers stay valid.
+    func deleteRows(sheetID: Int, rows: [Int]) async throws {
+        let requests: [[String: Any]] = Set(rows).sorted(by: >).map { row in
+            ["deleteDimension": ["range": ["sheetId": sheetID, "dimension": "ROWS", "startIndex": row - 1, "endIndex": row]]]
+        }
+        guard !requests.isEmpty else { return }
         _ = try await send(
             method: "POST",
             path: ":batchUpdate",
             query: [],
-            body: try JSONSerialization.data(withJSONObject: body),
+            body: try JSONSerialization.data(withJSONObject: ["requests": requests]),
             idempotent: false
         )
+    }
+
+    /// Tab titles to sheet ids.
+    func sheetIDs() async throws -> [String: Int] {
+        struct Spreadsheet: Decodable {
+            struct Sheet: Decodable {
+                struct Properties: Decodable { let sheetId: Int; let title: String }
+                let properties: Properties
+            }
+            let sheets: [Sheet]
+        }
+        let data = try await send(
+            method: "GET",
+            path: "",
+            query: [URLQueryItem(name: "fields", value: "sheets.properties(sheetId,title)")],
+            body: nil,
+            idempotent: true
+        )
+        guard let decoded = try? JSONDecoder().decode(Spreadsheet.self, from: data) else {
+            throw SheetsError(kind: .rejected, message: "A planilha devolveu dados que não entendi.")
+        }
+        return Dictionary(decoded.sheets.map { ($0.properties.title, $0.properties.sheetId) }, uniquingKeysWith: { a, _ in a })
     }
 
     // MARK: - Transport
@@ -150,7 +191,7 @@ final class SheetsClient {
                 }
             }
 
-            let separator = path.hasPrefix(":") ? "" : "/"
+            let separator = path.isEmpty || path.hasPrefix(":") ? "" : "/"
             var components = URLComponents(string: Self.base)!
             components.percentEncodedPath += spreadsheetID + separator + path
             if !query.isEmpty { components.queryItems = query }

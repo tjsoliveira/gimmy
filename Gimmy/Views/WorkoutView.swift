@@ -76,12 +76,15 @@ struct WorkoutView: View {
 
     @ViewBuilder
     private var content: some View {
-        if model.ledger.routines.isEmpty {
+        if model.availableRoutines.isEmpty {
             NoticeCard(
-                title: "Nenhuma rotina",
-                message: "Cadastre as rotinas na aba Rotinas da planilha e puxe a tela para recarregar.",
-                systemImage: "list.bullet.rectangle"
-            )
+                title: "Nenhum treino vigente",
+                message: "Nenhum treino vale em \(Fmt.fullDay(model.day)). Crie um ou ajuste a vigência na aba Configurar.",
+                systemImage: "list.bullet.clipboard",
+                actionTitle: "Configurar treinos"
+            ) {
+                model.tab = .setup
+            }
         } else if model.currentRows.isEmpty {
             StartCard()
         } else {
@@ -174,7 +177,7 @@ private struct WorkoutControls: View {
                     set: { model.selectRoutine($0) }
                 )) {
                     let trained = model.routinesOnDay
-                    ForEach(model.ledger.routines, id: \.self) { name in
+                    ForEach(model.availableRoutines, id: \.self) { name in
                         if trained.contains(name) {
                             Label(name, systemImage: "checkmark.circle.fill").tag(name)
                         } else {
@@ -195,7 +198,7 @@ private struct WorkoutControls: View {
                 .background(Color.appSurfaceHigh, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: Radius.md, style: .continuous).stroke(Color.appBorderDefault, lineWidth: 1))
             }
-            .disabled(model.busy != nil || model.ledger.routines.isEmpty)
+            .disabled(model.busy != nil || model.availableRoutines.isEmpty)
 
             Spacer()
 
@@ -324,6 +327,12 @@ private struct ExerciseCard: View {
                     .font(AppFont.caption)
                     .foregroundStyle(Color.textSecondary)
                     .monospacedDigit()
+                if let notes = planNotes(ledger) {
+                    Label(notes, systemImage: "info.circle")
+                        .font(AppFont.caption)
+                        .foregroundStyle(Color.textSecondary)
+                        .labelStyle(NoteLabelStyle())
+                }
                 ExerciseChips(status: ledger.status(group, day: model.day), record: ledger.isRecord(group, day: model.day))
             }
 
@@ -353,6 +362,14 @@ private struct ExerciseCard: View {
             .disabled(model.busy != nil)
         }
         .appCard()
+    }
+
+    /// The exercise's notes from the routine configuration.
+    private func planNotes(_ ledger: Ledger) -> String? {
+        guard let routine = model.routine,
+              let notes = ledger.planItem(exercise: group.exercise, routine: routine, day: model.day)?.notes,
+              !notes.isEmpty else { return nil }
+        return notes
     }
 
     private func lastTime(_ ledger: Ledger) -> String {
@@ -493,14 +510,22 @@ private struct StartCard: View {
         if let routine = model.routine {
             let template = model.ledger.template(routine: routine, day: model.day)
             if template.rows.isEmpty {
-                NoticeCard(title: "Rotina vazia", message: "Não achei exercícios para \(routine) na aba Rotinas.", systemImage: "list.bullet.rectangle")
+                let version = model.ledger.version(named: routine, on: model.day)
+                NoticeCard(
+                    title: "Treino sem exercícios",
+                    message: "Adicione os exercícios e as séries de \(routine) na aba Configurar.",
+                    systemImage: "list.bullet.rectangle",
+                    actionTitle: "Configurar \(routine)"
+                ) {
+                    model.tab = .setup
+                    model.setupPath = version.map { [PlanRoute.routine($0.id)] } ?? []
+                }
             } else {
                 VStack(alignment: .leading, spacing: 14) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("\(Fmt.weekday(model.day)), \(Fmt.shortDay(model.day))")
                             .captionLabel()
-                        Text(template.previousDay.map { "Mesmos exercícios, séries e reps do treino de \(Fmt.shortDay($0)). As cargas você preenche na hora." }
-                             ?? "Montado a partir da rotina planejada. As cargas você preenche na hora.")
+                        Text("Cópia do treino configurado: exercícios, tipos de série e reps. As cargas você preenche na hora.")
                             .font(AppFont.body)
                             .foregroundStyle(Color.textSecondary)
                     }
@@ -545,6 +570,8 @@ struct NoticeCard: View {
     let title: String
     let message: String
     let systemImage: String
+    var actionTitle: String?
+    var action: (() -> Void)?
 
     var body: some View {
         VStack(spacing: Spacing.sm) {
@@ -558,9 +585,24 @@ struct NoticeCard: View {
                 .font(AppFont.body)
                 .foregroundStyle(Color.textSecondary)
                 .multilineTextAlignment(.center)
+            if let actionTitle, let action {
+                Button(actionTitle, action: action)
+                    .buttonStyle(SecondaryButtonStyle(height: 44))
+                    .padding(.top, Spacing.xs)
+            }
         }
         .frame(maxWidth: .infinity)
         .appCard(padding: Spacing.xl)
+    }
+}
+
+/// Icon and text aligned on the first line, for notes that wrap.
+private struct NoteLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            configuration.icon.font(.system(size: 11, weight: .semibold))
+            configuration.title
+        }
     }
 }
 

@@ -225,7 +225,7 @@ struct SetEditorSheet: View {
         if case .seconds(let current) = RestInput.parse(draft.wrappedValue.rest) {
             next = max(0, current + delta)
         } else {
-            next = model.ledger.restTarget(exercise: draft.wrappedValue.row.exercise, routine: model.routine)
+            next = model.ledger.restTarget(exercise: draft.wrappedValue.row.exercise, routine: model.routine, day: model.day)
         }
         draft.wrappedValue.rest = Fmt.duration(Double(next))
     }

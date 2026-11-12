@@ -56,15 +56,20 @@ struct SetRow: Identifiable, Hashable {
     var isWarmup: Bool { kind == SetKind.warmup }
 }
 
-/// One line of the "Rotinas" tab.
-struct PlanItem {
-    var routine: String
-    var order: Double?
-    var exercise: String
-    var sets: Double?
-    var reps: String
-    var notes: String
-    var rest: Double?
+/// One line of the "Rotinas" tab: an exercise of a routine version.
+/// A line with the routine name but no exercise keeps a routine that has no exercises yet.
+struct PlanItem: Hashable {
+    var row: Int            // 1-based sheet row
+    var routine: String     // A
+    var order: Double?      // B
+    var exercise: String    // C
+    var sets: Double?       // F, number of series
+    var reps: String        // G, "15-12-10-6"
+    var notes: String       // H
+    var rest: Double?       // I, seconds
+    var kinds: String = ""  // J, set types aligned with G; empty on lines the app never configured
+    var start: String?      // K, first day the routine is valid
+    var end: String?        // L, last day; empty while it is the current one
 }
 
 struct ExerciseGroup: Identifiable, Hashable {
@@ -130,14 +135,13 @@ struct SessionStats {
     var downCount: Int { exercises.filter { $0.status?.kind == .down }.count }
 }
 
-struct TemplateRow {
+struct TemplateRow: Equatable {
     var exercise: String
     var kind: String
     var reps: Int
 }
 
 struct Template {
-    var previousDay: String?
     var rows: [TemplateRow]
 }
 
@@ -160,7 +164,8 @@ enum OneRM {
 /// Everything read from the spreadsheet, plus the rules the old page applied to it.
 struct Ledger {
     var plan: [PlanItem] = []
-    var routines: [String] = []
+    var versions: [RoutineVersion] = []
+    var planRowCount = 1
     var exercises: [String] = []
     var exerciseSheetRow: [String: Int] = [:]
     var units: [String: WeightUnit] = [:]
@@ -171,19 +176,23 @@ struct Ledger {
     // MARK: Parsing
 
     mutating func parsePlan(_ values: [[Cell]]) {
-        plan = values.dropFirst().map { r in
+        planRowCount = max(1, values.count)
+        plan = values.dropFirst().enumerated().map { i, r in
             PlanItem(
+                row: i + 2,
                 routine: Parse.text(r.at(0)),
                 order: Parse.number(r.at(1)),
                 exercise: Parse.text(r.at(2)),
                 sets: Parse.number(r.at(5)),
                 reps: Parse.text(r.at(6)),
                 notes: Parse.text(r.at(7)),
-                rest: Parse.number(r.at(8))
+                rest: Parse.number(r.at(8)),
+                kinds: Parse.text(r.at(9)),
+                start: Parse.day(r.at(10)),
+                end: Parse.day(r.at(11))
             )
-        }.filter { !$0.routine.isEmpty && !$0.exercise.isEmpty }
-        var seen = Set<String>()
-        routines = plan.map(\.routine).filter { seen.insert($0).inserted }
+        }.filter { !$0.routine.isEmpty }
+        versions = RoutineVersion.group(plan)
     }
 
     mutating func parseExercises(_ values: [[Cell]]) {
@@ -229,17 +238,8 @@ struct Ledger {
             lists["\(day)|\(x.exercise)", default: []].append(i)
         }
         for indices in lists.values {
-            var n = 0, k = 0
-            for (j, i) in indices.enumerated() {
-                if j > 0 && SetKind.chains(rows[indices[j - 1]].kind) {
-                    k += 1
-                    rows[i].serie = "\(n).\(k)"
-                } else {
-                    n += 1
-                    k = 0
-                    rows[i].serie = "\(n)"
-                }
-            }
+            let labels = Series.labels(indices.map { rows[$0].kind })
+            for (j, i) in indices.enumerated() { rows[i].serie = labels[j] }
         }
     }
 
@@ -249,8 +249,12 @@ struct Ledger {
     func kgFactor(_ exercise: String) -> Double { unit(of: exercise) == .lb ? WeightUnit.poundInKg : 1 }
     func row(_ number: Int) -> SetRow? { rows.first { $0.row == number } }
 
-    func restTarget(exercise: String, routine: String?) -> Int {
-        let item = plan.first { $0.routine == routine && $0.exercise == exercise } ?? plan.first { $0.exercise == exercise }
+    /// Planned rest for an exercise: from the routine version in force on `day` when given, else any line of it.
+    func restTarget(exercise: String, routine: String?, day: String? = nil) -> Int {
+        let current = routine.flatMap { name in day.flatMap { version(named: name, on: $0) } }
+        let item = current.flatMap { v in plan.first { v.rows.contains($0.row) && $0.exercise == exercise } }
+            ?? plan.first { $0.routine == routine && $0.exercise == exercise }
+            ?? plan.first { $0.exercise == exercise }
         if let rest = item?.rest, rest > 0 { return Int(rest) }
         return 90
     }
@@ -272,7 +276,7 @@ struct Ledger {
         return out
     }
 
-    private func latestDay(before day: String, where match: (SetRow) -> Bool) -> String? {
+    func latestDay(before day: String, where match: (SetRow) -> Bool) -> String? {
         var best: String?
         for x in rows where x.isDone && match(x) {
             if let d = x.day, d < day, best.map({ d > $0 }) ?? true { best = d }
@@ -349,30 +353,6 @@ struct Ledger {
     }
 
     // MARK: Sessions
-
-    func template(routine: String, day: String) -> Template {
-        if let p = previousSessionDay(routine: routine, before: day) {
-            let source = rows.filter { $0.routine == routine && $0.day == p && $0.isDone }
-            return Template(previousDay: p, rows: source.map { TemplateRow(exercise: $0.exercise, kind: $0.kind, reps: $0.reps ?? 10) })
-        }
-        let items = plan.enumerated()
-            .filter { $0.element.routine == routine }
-            .sorted { a, b in
-                let x = a.element.order ?? 99, y = b.element.order ?? 99
-                return x == y ? a.offset < b.offset : x < y
-            }
-            .map(\.element)
-        var out: [TemplateRow] = []
-        for item in items {
-            let reps = item.reps.split(whereSeparator: { !$0.isNumber }).compactMap { Int($0) }.filter { $0 > 0 }
-            let planned = Int(item.sets ?? 0)
-            let n = planned > 0 ? planned : (reps.isEmpty ? 3 : reps.count)
-            for i in 0..<n {
-                out.append(TemplateRow(exercise: item.exercise, kind: SetKind.normal, reps: i < reps.count ? reps[i] : (reps.last ?? 10)))
-            }
-        }
-        return Template(previousDay: nil, rows: out)
-    }
 
     /// Exercises and set counts shown before a workout starts; drop and rest-pause sets don't count as new sets.
     func plannedExercises(_ t: Template) -> [PlannedExercise] {

@@ -39,6 +39,11 @@ struct RootView: View {
                         .tag(AppModel.Tab.history)
                         .toolbarBackground(Color.appSurface, for: .tabBar)
                         .toolbarBackground(.visible, for: .tabBar)
+                    SetupView()
+                        .tabItem { Label("Configurar", systemImage: "slider.horizontal.3") }
+                        .tag(AppModel.Tab.setup)
+                        .toolbarBackground(Color.appSurface, for: .tabBar)
+                        .toolbarBackground(.visible, for: .tabBar)
                 }
             }
         }

@@ -21,7 +21,7 @@ struct RestState: Codable, Equatable {
 @Observable
 final class AppModel {
     enum Phase: Equatable { case needsConfig, signedOut, loading, ready, failed(String) }
-    enum Tab: Hashable { case workout, history }
+    enum Tab: Hashable { case workout, history, setup }
 
     var phase: Phase = .loading
     var ledger = Ledger()
@@ -33,6 +33,7 @@ final class AppModel {
     var tab: Tab = .workout
     var workoutPath: [String] = []
     var historyPath: [String] = []
+    var setupPath: [PlanRoute] = []
     /// The set open in the editor sheet.
     var entry: SetDraft?
     var entryError: String?
@@ -47,8 +48,10 @@ final class AppModel {
 
     let config: AppConfig
     private let auth: GoogleAuth
-    private let sheets: SheetsClient
-    private let defaults = UserDefaults.standard
+    /// Internal (not private) for the routine setup in AppModel+Plan.swift.
+    let sheets: SheetsClient
+    let defaults = UserDefaults.standard
+    @ObservationIgnored var tabIDs: [String: Int] = [:]
 
     init() {
         let config = AppConfig.load()
@@ -73,6 +76,14 @@ final class AppModel {
     /// Routines that already have sets on the selected day.
     var routinesOnDay: Set<String> {
         Set(ledger.rows.filter { $0.day == day && $0.reps != nil }.map(\.routine))
+    }
+
+    /// What the routine picker offers on the selected day: the routines in force, plus any already logged that day.
+    var availableRoutines: [String] {
+        let valid = ledger.routines(on: day)
+        var seen = Set(valid)
+        let logged = ledger.rows.filter { $0.day == day && $0.reps != nil && !$0.routine.isEmpty }.map(\.routine)
+        return valid + logged.filter { seen.insert($0).inserted }
     }
 
     // MARK: - Lifecycle
@@ -103,6 +114,7 @@ final class AppModel {
         ledger = Ledger()
         workoutPath = []
         historyPath = []
+        setupPath = []
         phase = .signedOut
     }
 
@@ -135,7 +147,7 @@ final class AppModel {
     }
 
     private func loadAll() async throws {
-        let plan = try await sheets.values("Rotinas!A1:I")
+        let plan = try await sheets.values("Rotinas!A1:L")
         async let exercises = sheets.values("'Exercícios'!A1:D")
         async let registro = sheets.values("Registro!A1:Q")
         let (e, r) = try await (exercises, registro)
@@ -148,6 +160,10 @@ final class AppModel {
 
     private func loadRegistro() async throws {
         ledger.parseRegistro(try await sheets.values("Registro!A1:Q"))
+    }
+
+    func loadPlan() async throws {
+        ledger.parsePlan(try await sheets.values("Rotinas!A1:L"))
     }
 
     // MARK: - Selection
@@ -168,14 +184,16 @@ final class AppModel {
         ensureSelection()
     }
 
-    private func pickRoutine() {
-        if let today = ledger.rows.first(where: { $0.day == day && ledger.routines.contains($0.routine) }) {
+    /// The routine logged on the day, else the current choice if still offered, else the last used, else the first.
+    func pickRoutine() {
+        if let today = ledger.rows.first(where: { $0.day == day && $0.reps != nil && !$0.routine.isEmpty }) {
             routine = today.routine
             return
         }
-        if let routine, ledger.routines.contains(routine) { return }
+        let available = availableRoutines
+        if let routine, available.contains(routine) { return }
         let saved = defaults.string(forKey: "treino")
-        routine = saved.flatMap { ledger.routines.contains($0) ? $0 : nil } ?? ledger.routines.first
+        routine = saved.flatMap { available.contains($0) ? $0 : nil } ?? available.first
     }
 
     func openForEditing(_ session: Session) {
@@ -203,7 +221,7 @@ final class AppModel {
     }
 
     /// Keeps the open exercise and the edited set valid after data changes.
-    private func ensureSelection() {
+    func ensureSelection() {
         let rows = currentRows
         guard !rows.isEmpty else { entry = nil; focusedRow = nil; return }
         if let e = entry, !rows.contains(where: { $0.row == e.row.row && $0.exercise == e.row.exercise }) { entry = nil }
@@ -551,7 +569,7 @@ final class AppModel {
         return nil
     }
 
-    private func setUnit(_ exercise: String, _ unit: WeightUnit) async throws {
+    func setUnit(_ exercise: String, _ unit: WeightUnit) async throws {
         if let row = ledger.exerciseSheetRow[exercise] {
             try await sheets.update("'Exercícios'!D\(row)", [[.text(unit.rawValue)]])
         } else {
@@ -647,7 +665,7 @@ final class AppModel {
     // MARK: - Rest timer
 
     private func startRest(after x: SetRow) {
-        let target = SetKind.chainRest(x.kind) ?? ledger.restTarget(exercise: x.exercise, routine: routine)
+        let target = SetKind.chainRest(x.kind) ?? ledger.restTarget(exercise: x.exercise, routine: x.routine, day: x.day ?? day)
         let state = RestState(row: x.row, exercise: x.exercise, day: x.day ?? day, start: Date(), target: target, alerted: false)
         rest = state
         saveRest()
@@ -776,7 +794,7 @@ final class AppModel {
     }
 
     /// Runs one sheet operation at a time. Returns a message on failure.
-    private func perform(_ label: String, write: Bool, _ operation: () async throws -> Void) async -> String? {
+    func perform(_ label: String, write: Bool, _ operation: () async throws -> Void) async -> String? {
         guard busy == nil else { return "Espere a operação em andamento terminar." }
         busy = label
         defer { busy = nil }

@@ -173,6 +173,22 @@ enum Fmt {
         return p.count == 3 ? "\(p[2])/\(p[1])" : key
     }
 
+    /// "01/12/2026".
+    static func fullDay(_ key: String) -> String {
+        let p = key.split(separator: "-")
+        return p.count == 3 ? "\(p[2])/\(p[1])/\(p[0])" : key
+    }
+
+    /// A routine's dates in words.
+    static func validity(_ start: String?, _ end: String?) -> String {
+        switch (start, end) {
+        case (nil, nil): return "Sem datas definidas"
+        case let (s?, nil): return "Desde \(fullDay(s))"
+        case let (nil, e?): return "Até \(fullDay(e))"
+        case let (s?, e?): return "\(fullDay(s)) a \(fullDay(e))"
+        }
+    }
+
     static func weekday(_ key: String) -> String {
         guard let date = DayKey.date(key) else { return "" }
         let names = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"]

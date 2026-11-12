@@ -19,10 +19,14 @@ func registroRow(
     return r
 }
 
-/// A Rotinas row: routine, order, exercise, sets, reps text, rest target.
-func planRow(_ routine: String, order: Double, _ exercise: String, sets: Double?, reps: String, rest: Double? = nil) -> [Cell] {
-    [.text(routine), .number(order), .text(exercise), .empty, .empty,
-     sets.map { .number($0) } ?? .empty, .text(reps), .empty, rest.map { .number($0) } ?? .empty]
+/// A Rotinas row (columns A–L): routine, order, exercise, series, reps, notes, rest target, types, start, end.
+func planRow(
+    _ routine: String, order: Double?, _ exercise: String, sets: Double? = nil, reps: String = "",
+    rest: Double? = nil, notes: String = "", kinds: String = "", start: Cell = .empty, end: Cell = .empty
+) -> [Cell] {
+    [.text(routine), order.map { .number($0) } ?? .empty, exercise.isEmpty ? .empty : .text(exercise), .empty, .empty,
+     sets.map { .number($0) } ?? .empty, reps.isEmpty ? .empty : .text(reps), notes.isEmpty ? .empty : .text(notes),
+     rest.map { .number($0) } ?? .empty, kinds.isEmpty ? .empty : .text(kinds), start, end]
 }
 
 func makeLedger(registro: [[Cell]], plan: [[Cell]] = [], exercises: [[Cell]] = []) -> Ledger {

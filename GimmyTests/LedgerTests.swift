@@ -76,25 +76,31 @@ final class LedgerTests: XCTestCase {
             planRow("Costas", order: 1, "A", sets: 4, reps: "15-12-10-6", rest: 120),
         ])
         let t = l.template(routine: "Costas", day: "2026-11-10")
-        XCTAssertNil(t.previousDay)
         XCTAssertEqual(t.rows.map(\.exercise), ["A", "A", "A", "A", "B", "B"])
         XCTAssertEqual(t.rows.map(\.reps), [15, 12, 10, 6, 12, 12])
         XCTAssertEqual(l.restTarget(exercise: "A", routine: "Costas"), 120)
         XCTAssertEqual(l.restTarget(exercise: "B", routine: "Costas"), 90)
     }
 
-    func testTemplateCopiesThePreviousSession() {
-        let l = makeLedger(registro: [
-            registroRow("03/11/2026", "Costas", "A", load: 40, reps: 12),
-            registroRow("03/11/2026", "Costas", "A", kind: SetKind.drop, load: 40, reps: 8),
-            registroRow("03/11/2026", "Costas", "A", load: 30, reps: 6),
-            registroRow("03/11/2026", "Costas", "B", load: nil, reps: 10),
-        ])
+    func testTemplateCopiesTheLastSessionOfUnconfiguredExercises() {
+        let l = makeLedger(
+            registro: [
+                registroRow("03/11/2026", "Costas", "A", load: 40, reps: 12),
+                registroRow("03/11/2026", "Costas", "A", kind: SetKind.drop, load: 40, reps: 8),
+                registroRow("03/11/2026", "Costas", "A", load: 30, reps: 6),
+                registroRow("03/11/2026", "Costas", "B", load: nil, reps: 10),
+            ],
+            plan: [
+                planRow("Costas", order: 1, "A", sets: 4, reps: "15-12-10-6"),
+                planRow("Costas", order: 2, "B", sets: 2, reps: "12"),
+            ]
+        )
         let t = l.template(routine: "Costas", day: "2026-11-10")
-        XCTAssertEqual(t.previousDay, "2026-11-03")
-        XCTAssertEqual(t.rows.map(\.exercise), ["A", "A", "A"], "only logged sets are copied")
-        XCTAssertEqual(t.rows.map(\.kind), ["", SetKind.drop, ""])
-        XCTAssertEqual(l.plannedExercises(t).map(\.sets), [2], "a drop part is not a new set")
+        XCTAssertEqual(t.rows.map(\.exercise), ["A", "A", "A", "B", "B"],
+                       "A copies its logged sets from last time; B was never logged, so it uses Séries and Reps")
+        XCTAssertEqual(t.rows.map(\.kind), ["", SetKind.drop, "", "", ""])
+        XCTAssertEqual(t.rows.map(\.reps), [12, 8, 6, 12, 12])
+        XCTAssertEqual(l.plannedExercises(t).map(\.sets), [2, 2], "a drop part is not a new set")
     }
 
     func testSessionsAndStats() {
