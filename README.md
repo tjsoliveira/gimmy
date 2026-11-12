@@ -11,7 +11,7 @@ App de iPhone para registrar treinos. É a versão nativa (SwiftUI) do artefato 
 - **Descanso**: depois de registrar uma série, o relógio de descanso aparece em baixo. Quando chega no alvo da aba Rotinas (padrão 1:30), o iPhone avisa com notificação e som, mesmo bloqueado.
 - **Histórico**: treinos por mês, com volume e variação contra o treino anterior, exercícios que subiram ou caíram e recordes. Dá para abrir um treino antigo para editar.
 
-As regras de cálculo são as mesmas do artefato: numeração de séries com drops (3.1, 3.2), 1RM estimado (Brzycki até 10 reps, Epley acima), volume em kg sem aquecimento, recorde só quando o exercício também subiu.
+As regras de cálculo são as mesmas do artefato: numeração de séries com drop e rest-pause (3.1, 3.2), descanso curto dentro da sequência (10 s depois de drop, 15 s depois de rest-pause), 1RM estimado (Brzycki até 10 reps, Epley acima), volume em kg sem aquecimento, recorde só quando o exercício também subiu.
 
 ## Como a planilha é usada
 

@@ -12,6 +12,7 @@ enum SetColors {
         switch kind {
         case SetKind.warmup: return .orange
         case SetKind.drop: return .purple
+        case SetKind.restPause: return .teal
         case SetKind.failure: return .red
         default: return nil
         }
@@ -173,6 +174,7 @@ struct SetRowContent: View {
         switch row.kind {
         case SetKind.warmup: parts.append("aquecimento")
         case SetKind.drop: parts.append("drop")
+        case SetKind.restPause: parts.append("rest-pause")
         case SetKind.failure: parts.append("falha")
         default: break
         }

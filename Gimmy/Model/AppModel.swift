@@ -431,7 +431,7 @@ final class AppModel {
     // MARK: - Rest timer
 
     private func startRest(after x: SetRow) {
-        let target = ledger.restTarget(exercise: x.exercise, routine: routine)
+        let target = SetKind.chainRest(x.kind) ?? ledger.restTarget(exercise: x.exercise, routine: routine)
         let state = RestState(row: x.row, exercise: x.exercise, day: x.day ?? day, start: Date(), target: target, alerted: false)
         rest = state
         saveRest()

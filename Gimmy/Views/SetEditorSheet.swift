@@ -62,6 +62,7 @@ struct SetEditorSheet: View {
                     Picker("Tipo", selection: $draft.kind) {
                         Text("Normal").tag(SetKind.normal)
                         Text("Drop").tag(SetKind.drop)
+                        Text("Rest-p.").tag(SetKind.restPause)
                         Text("Falha").tag(SetKind.failure)
                         Text("Aquec.").tag(SetKind.warmup)
                     }

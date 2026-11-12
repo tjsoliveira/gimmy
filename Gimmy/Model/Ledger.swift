@@ -18,14 +18,28 @@ enum WeightUnit: String, CaseIterable, Codable, Sendable {
 enum SetKind {
     static let normal = ""
     static let drop = "Drop"
+    static let restPause = "Rest-pause"
     static let failure = "Falha"
     static let warmup = "Aquecimento"
+
+    /// Drop and Rest-pause chain the next set into the same series.
+    static func chains(_ kind: String) -> Bool { kind == drop || kind == restPause }
+
+    /// Inside a chain the pause is short: 10 s to strip the plates after a drop,
+    /// 15 s of breathing after a rest-pause.
+    static func chainRest(_ kind: String) -> Int? {
+        switch kind {
+        case drop: return 10
+        case restPause: return 15
+        default: return nil
+        }
+    }
 }
 
 /// One line of the "Registro" tab.
 struct SetRow: Identifiable, Hashable {
     var row: Int            // 1-based sheet row
-    var kind: String        // D: "", Drop, Falha, Aquecimento
+    var kind: String        // D: "", Drop, Rest-pause, Falha, Aquecimento
     var load: Double?       // E
     var reps: Int?          // F
     var serie = ""          // H, recomputed locally
@@ -206,7 +220,7 @@ struct Ledger {
     }
 
     /// Same rule as the sheet's Série column: every set advances the number,
-    /// except a set that follows one marked Drop, which continues it as X.1, X.2.
+    /// except a set that follows one marked Drop or Rest-pause, which continues it as X.1, X.2.
     mutating func renumber() {
         var lists: [String: [Int]] = [:]
         for (i, x) in rows.enumerated() {
@@ -216,7 +230,7 @@ struct Ledger {
         for indices in lists.values {
             var n = 0, k = 0
             for (j, i) in indices.enumerated() {
-                if j > 0 && rows[indices[j - 1]].kind == SetKind.drop {
+                if j > 0 && SetKind.chains(rows[indices[j - 1]].kind) {
                     k += 1
                     rows[i].serie = "\(n).\(k)"
                 } else {
@@ -353,13 +367,13 @@ struct Ledger {
         return Template(previousDay: nil, rows: out)
     }
 
-    /// Exercises and set counts shown before a workout starts; drop sets don't count as new sets.
+    /// Exercises and set counts shown before a workout starts; drop and rest-pause sets don't count as new sets.
     func plannedExercises(_ t: Template) -> [PlannedExercise] {
         var out: [PlannedExercise] = []
         var previousKind = ""
         for x in t.rows {
             if var last = out.last, last.exercise == x.exercise {
-                if previousKind != SetKind.drop { last.sets += 1 }
+                if !SetKind.chains(previousKind) { last.sets += 1 }
                 out[out.count - 1] = last
             } else {
                 out.append(PlannedExercise(id: out.count, exercise: x.exercise, sets: 1))
