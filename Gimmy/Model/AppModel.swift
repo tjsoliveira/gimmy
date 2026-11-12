@@ -17,7 +17,7 @@ struct RestState: Codable, Equatable {
     var alerted: Bool
 }
 
-/// What the set editor works on; saved only when the user taps Salvar.
+/// What the quick-entry card works on; saved only when the user taps Salvar série.
 struct SetDraft: Identifiable {
     let row: SetRow
     let last: SetRow?
@@ -46,7 +46,11 @@ final class AppModel {
     var tab: Tab = .workout
     var workoutPath: [String] = []
     var historyPath: [String] = []
-    var editing: SetDraft?
+    /// The set the quick-entry card is editing.
+    var entry: SetDraft?
+    var entryError: String?
+    /// Any row of the exercise shown open on the workout screen.
+    var focusedRow: Int?
     var addingExercise = false
     var finishing = false
     var rest: RestState?
@@ -105,7 +109,8 @@ final class AppModel {
     func signOut() {
         auth.signOut()
         dismissRest()
-        editing = nil
+        entry = nil
+        focusedRow = nil
         ledger = Ledger()
         workoutPath = []
         historyPath = []
@@ -119,6 +124,7 @@ final class AppModel {
             pickRoutine()
             phase = .ready
             restoreRest()
+            ensureSelection()
         } catch {
             if isAuthError(error) {
                 signInError = error.localizedDescription
@@ -133,6 +139,7 @@ final class AppModel {
         if let message = await perform("Recarregando…", write: false, {
             try await self.loadAll()
             self.pickRoutine()
+            self.ensureSelection()
         }) {
             show(message, error: true)
         }
@@ -159,11 +166,17 @@ final class AppModel {
     func selectRoutine(_ value: String) {
         routine = value
         defaults.set(value, forKey: "treino")
+        entry = nil
+        focusedRow = nil
+        ensureSelection()
     }
 
     func selectDay(_ value: String) {
         day = value
         if phase == .ready { pickRoutine() }
+        entry = nil
+        focusedRow = nil
+        ensureSelection()
     }
 
     private func pickRoutine() {
@@ -181,6 +194,47 @@ final class AppModel {
         routine = session.routine
         workoutPath = []
         tab = .workout
+        entry = nil
+        focusedRow = nil
+        ensureSelection()
+    }
+
+    // MARK: - Focus & quick entry
+
+    /// The exercise shown open: the one holding `focusedRow`, else the first with sets left, else the last.
+    var focusedGroup: ExerciseGroup? {
+        let groups = ledger.groups(currentRows)
+        if let focusedRow, let g = groups.first(where: { $0.rows.contains { $0.row == focusedRow } }) { return g }
+        return groups.first(where: { $0.rows.contains { !$0.isDone } }) ?? groups.last
+    }
+
+    func focus(_ group: ExerciseGroup) {
+        guard busy == nil else { return }
+        focusedRow = group.rows.first?.row
+        if let pending = group.rows.first(where: { !$0.isDone }) {
+            select(pending)
+        } else {
+            entry = nil
+        }
+    }
+
+    /// Keeps the open exercise and the selected set valid after data changes,
+    /// selecting the first set still to log when nothing is selected.
+    private func ensureSelection() {
+        let rows = currentRows
+        guard !rows.isEmpty else { entry = nil; focusedRow = nil; return }
+        if let e = entry, !rows.contains(where: { $0.row == e.row.row && $0.exercise == e.row.exercise }) { entry = nil }
+        if let f = focusedRow, !rows.contains(where: { $0.row == f }) { focusedRow = nil }
+        guard entry == nil else { return }
+        let pending = focusedGroup?.rows.first(where: { !$0.isDone }) ?? rows.first(where: { !$0.isDone })
+        if let pending { setEntry(pending) }
+    }
+
+    /// After logging a set, moves the card to the next set still to log (wrapping around).
+    private func selectNext(after row: Int) {
+        let rows = currentRows
+        let next = rows.first(where: { $0.row > row && !$0.isDone }) ?? rows.first(where: { !$0.isDone })
+        if let next { setEntry(next) } else { entry = nil }
     }
 
     // MARK: - Workout
@@ -212,16 +266,28 @@ final class AppModel {
             self.defaults.set(Date().timeIntervalSince1970, forKey: self.startKey(self.day, routine))
         }
         if let error { show(error, error: true); return }
-        show(alreadyThere ? "Esse treino já estava na planilha." : "Treino montado. Toque numa série para registrar.")
+        ensureSelection()
+        show(alreadyThere ? "Esse treino já estava na planilha." : "Treino montado. Registre a primeira série.")
     }
 
-    func edit(_ x: SetRow) {
+    func select(_ x: SetRow) {
         guard busy == nil else { return }
+        setEntry(x)
+    }
+
+    /// Same as `select` but also allowed while a sheet operation runs.
+    private func setEntry(_ x: SetRow) {
+        entry = draft(for: x)
+        entryError = nil
+        focusedRow = x.row
+    }
+
+    func draft(for x: SetRow) -> SetDraft {
         let last = ledger.lastSet(for: x)
         let load = x.load ?? last?.load
         let unit = ledger.unit(of: x.exercise)
         let rest = (x.rest ?? x.pendingRest).map { Fmt.duration(Double($0)) } ?? ""
-        editing = SetDraft(
+        return SetDraft(
             row: x,
             last: last,
             load: Fmt.loadInput(load),
@@ -233,7 +299,7 @@ final class AppModel {
         )
     }
 
-    /// Returns an error to show in the editor, or nil once the editor can close.
+    /// Returns an error to show next to the set, or nil once saved.
     func save(_ d: SetDraft, clear: Bool) async -> String? {
         let x = d.row
         let load = Parse.number(d.load)
@@ -286,8 +352,10 @@ final class AppModel {
             let unitChanged = !clear && d.unit != self.ledger.unit(of: x.exercise)
             if unitChanged { try await self.setUnit(x.exercise, d.unit) }
 
-            self.editing = nil
             if kindChanged { self.ledger.renumber() }
+            if self.entry?.row.row == x.row {
+                if clear, let cleared = self.ledger.row(x.row) { self.setEntry(cleared) } else { self.entry = nil }
+            }
 
             guard let saved = self.ledger.row(x.row) else { return }
             if clear {
@@ -312,11 +380,13 @@ final class AppModel {
             if clear && self.rest?.row == x.row { self.dismissRest() }
         }
         if conflict {
-            editing = nil
+            entry = nil
+            ensureSelection()
             show("A planilha mudou desde que você abriu o app. Confira a série e salve de novo.", error: true)
             return nil
         }
         if let error { return error }
+        if !clear && entry == nil { selectNext(after: x.row) }
         show(message)
         return nil
     }
@@ -337,7 +407,7 @@ final class AppModel {
         }
         if conflict { show("A planilha mudou. Confira e toque em Adicionar série de novo.", error: true); return }
         if let error { show(error, error: true); return }
-        if let next = ledger.row(last.row + 1) { edit(next) }
+        if let next = ledger.row(last.row + 1) { select(next) }
     }
 
     /// Returns an error to show in the sheet, or nil once it can close.
@@ -372,6 +442,7 @@ final class AppModel {
         }
         if let error { return error }
         addingExercise = false
+        if let first = ledger.row(last.row + 1) { select(first) }
         show("\(name) adicionado com \(sets) \(sets == 1 ? "série" : "séries").")
         return nil
     }
@@ -433,11 +504,13 @@ final class AppModel {
                     self.saveRest()
                 }
             }
-            self.editing = nil
+            if self.entry?.row.row == x.row { self.entry = nil }
             try await self.loadRegistro()
+            self.ensureSelection()
         }
         if conflict {
-            editing = nil
+            entry = nil
+            ensureSelection()
             show("A planilha mudou desde que você abriu o app. Confira e tente de novo.", error: true)
             return nil
         }
@@ -646,7 +719,7 @@ final class AppModel {
 
     private func describe(_ error: Error, write: Bool) -> String {
         if isAuthError(error) {
-            editing = nil
+            entry = nil
             addingExercise = false
             finishing = false
             signInError = "O acesso ao Google expirou. Entre de novo."

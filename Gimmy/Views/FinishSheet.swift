@@ -70,7 +70,7 @@ struct FinishSheet: View {
                             StatusBadge(text: status.text, color: status.color)
                         }
                         if item.record {
-                            StatusBadge(text: "Recorde", color: .orange)
+                            StatusBadge(text: "Recorde", color: .setWarmup)
                         }
                     }
                 }
@@ -79,11 +79,12 @@ struct FinishSheet: View {
             if let error {
                 Section {
                     Label(error, systemImage: "exclamationmark.circle.fill")
-                        .foregroundStyle(.red)
+                        .foregroundStyle(Color.statusDanger)
                 }
             }
         }
         .scrollDismissesKeyboard(.interactively)
+        .appListStyle()
         .safeAreaInset(edge: .bottom) {
             BottomActionButton(title: "Finalizar treino", busy: model.busy) {
                 Task { error = await model.finish(minutes: minutes) }
@@ -109,7 +110,7 @@ struct VolumeRow: View {
                 if let change = stats.volumeChange, let previous = stats.previousDay {
                     Text("\(Fmt.percent(change)) vs \(Fmt.shortDay(previous))")
                         .font(.caption)
-                        .foregroundStyle(change >= 0 ? Color.green : Color.red)
+                        .foregroundStyle(change >= 0 ? Color.statusSuccess : Color.statusDanger)
                 }
             }
             .monospacedDigit()

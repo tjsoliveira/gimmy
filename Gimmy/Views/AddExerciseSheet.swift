@@ -52,10 +52,11 @@ struct AddExerciseSheet: View {
                 if let error {
                     Section {
                         Label(error, systemImage: "exclamationmark.circle.fill")
-                            .foregroundStyle(.red)
+                            .foregroundStyle(Color.statusDanger)
                     }
                 }
             }
+            .appListStyle()
             .navigationTitle("Adicionar exercício")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

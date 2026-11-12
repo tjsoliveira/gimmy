@@ -32,12 +32,21 @@ struct RootView: View {
                     WorkoutView()
                         .tabItem { Label("Treino", systemImage: "dumbbell") }
                         .tag(AppModel.Tab.workout)
+                        .toolbarBackground(Color.appSurface, for: .tabBar)
+                        .toolbarBackground(.visible, for: .tabBar)
                     HistoryView()
                         .tabItem { Label("Histórico", systemImage: "calendar") }
                         .tag(AppModel.Tab.history)
+                        .toolbarBackground(Color.appSurface, for: .tabBar)
+                        .toolbarBackground(.visible, for: .tabBar)
                 }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.appBackground)
+        .foregroundStyle(Color.textPrimary)
+        .tint(.linearBlue)
+        .preferredColorScheme(.dark)
         .overlay(alignment: .top) {
             if let banner = model.banner {
                 BannerView(banner: banner)
@@ -55,16 +64,18 @@ struct BannerView: View {
     var body: some View {
         Label {
             Text(banner.text)
-                .font(.subheadline.weight(.medium))
+                .font(AppFont.bodyBold)
+                .foregroundStyle(Color.textPrimary)
                 .multilineTextAlignment(.leading)
         } icon: {
             Image(systemName: banner.isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
-                .foregroundStyle(banner.isError ? .red : .green)
+                .foregroundStyle(banner.isError ? Color.statusDanger : Color.statusSuccess)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
+        .background(Color.appSurfaceHigh, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Radius.lg, style: .continuous).stroke(Color.appBorderStrong, lineWidth: 1))
+        .shadow(color: .black.opacity(0.4), radius: 12, y: 4)
         .padding(.horizontal, 16)
         .padding(.top, 4)
         .accessibilityAddTraits(.isStaticText)
@@ -85,16 +96,18 @@ struct SignInView: View {
                 .accessibilityHidden(true)
             VStack(spacing: 8) {
                 Text("Gimmy")
-                    .font(.condensed(.largeTitle, weight: .bold))
+                    .font(AppFont.display)
+                    .foregroundStyle(Color.textPrimary)
                 Text("Entre com a conta Google que tem acesso à planilha Controle de Treinos. Tudo continua sendo lido e gravado nela.")
+                    .font(AppFont.body)
                     .multilineTextAlignment(.center)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.textSecondary)
             }
             Spacer()
             if let error = model.signInError {
                 Text(error)
                     .font(.footnote)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(Color.statusDanger)
                     .multilineTextAlignment(.center)
             }
             Button {
@@ -107,12 +120,9 @@ struct SignInView: View {
                 HStack(spacing: 8) {
                     if working { ProgressView().tint(.white) }
                     Text("Entrar com Google")
-                        .font(.condensed(.title3, weight: .bold))
                 }
-                .frame(maxWidth: .infinity, minHeight: 34)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
+            .buttonStyle(PrimaryButtonStyle())
             .disabled(working)
         }
         .padding(24)

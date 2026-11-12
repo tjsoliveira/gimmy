@@ -22,14 +22,18 @@ struct HistoryView: View {
                                     NavigationLink(value: session.key) {
                                         HistoryRow(session: session, stats: model.ledger.stats(session))
                                     }
+                                    .listRowBackground(Color.appSurface)
                                 }
                             }
                         }
                     }
                     .listStyle(.insetGrouped)
+                    .appListStyle()
                 }
             }
+            .background(Color.appBackground)
             .navigationTitle("Histórico")
+            .toolbarBackground(Color.appBackground, for: .navigationBar)
             .refreshable { await model.reload() }
             .navigationDestination(for: String.self) { key in
                 SessionDetailView(key: key, allowsEditing: true)
@@ -65,27 +69,28 @@ private struct HistoryRow: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline) {
                 Text(session.routine)
-                    .font(.condensed(.title3))
+                    .font(AppFont.titleMedium)
+                    .foregroundStyle(Color.textPrimary)
                 Spacer()
                 Text("\(Fmt.weekday(session.day)), \(Fmt.shortDay(session.day))")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .font(AppFont.caption)
+                    .foregroundStyle(Color.textSecondary)
                     .monospacedDigit()
             }
             summary
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .font(AppFont.caption)
+                .foregroundStyle(Color.textSecondary)
                 .monospacedDigit()
             if stats.upCount + stats.downCount + stats.records > 0 {
                 HStack(spacing: 6) {
                     if stats.upCount > 0 {
-                        StatusBadge(text: "\(stats.upCount) \(stats.upCount == 1 ? "subiu" : "subiram")", color: .green)
+                        StatusBadge(text: "\(stats.upCount) \(stats.upCount == 1 ? "subiu" : "subiram")", color: .statusSuccess)
                     }
                     if stats.downCount > 0 {
-                        StatusBadge(text: "\(stats.downCount) \(stats.downCount == 1 ? "caiu" : "caíram")", color: .red)
+                        StatusBadge(text: "\(stats.downCount) \(stats.downCount == 1 ? "caiu" : "caíram")", color: .statusDanger)
                     }
                     if stats.records > 0 {
-                        StatusBadge(text: "\(stats.records) \(stats.records == 1 ? "recorde" : "recordes")", color: .orange)
+                        StatusBadge(text: "\(stats.records) \(stats.records == 1 ? "recorde" : "recordes")", color: .setWarmup)
                     }
                 }
             }
@@ -98,7 +103,7 @@ private struct HistoryRow: View {
         if let change = stats.volumeChange {
             text = text + Text(" \(Fmt.percent(change))")
                 .fontWeight(.semibold)
-                .foregroundColor(change >= 0 ? .green : .red)
+                .foregroundColor(change >= 0 ? .statusSuccess : .statusDanger)
         }
         if let duration = stats.duration { text = text + Text(" · \(Fmt.minutes(duration))") }
         if let rest = stats.averageRest { text = text + Text(" · desc. \(Fmt.duration(rest))") }
@@ -125,15 +130,25 @@ struct SessionDetailView: View {
                         Text("\(Fmt.weekday(session.day)), \(Fmt.shortDay(session.day))")
                     }
                     .monospacedDigit()
+                    .listRowBackground(Color.appSurface)
 
                     ForEach(stats.exercises) { item in
                         Section {
                             ForEach(item.group.rows.filter(\.isDone)) { row in
-                                SetRowContent(row: row)
+                                SetRowView(set: WorkoutSet(row: row, ledger: model.ledger), readOnly: true)
+                                    .listRowInsets(EdgeInsets(top: 0, leading: 8, bottom: 0, trailing: 8))
                             }
                         } header: {
-                            ExerciseHeader(name: item.group.exercise, status: item.status, record: item.record)
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(item.group.exercise)
+                                    .font(AppFont.titleMedium)
+                                    .foregroundStyle(Color.textPrimary)
+                                ExerciseChips(status: item.status, record: item.record)
+                            }
+                            .textCase(nil)
+                            .padding(.top, 8)
                         }
+                        .listRowBackground(Color.appSurface)
                     }
 
                     if allowsEditing {
@@ -142,9 +157,11 @@ struct SessionDetailView: View {
                                 model.openForEditing(session)
                             }
                         }
+                        .listRowBackground(Color.appSurface)
                     }
                 }
                 .listStyle(.insetGrouped)
+                .appListStyle()
                 .navigationTitle(session.routine)
             } else {
                 ContentUnavailableView("Treino não encontrado", systemImage: "questionmark.circle")

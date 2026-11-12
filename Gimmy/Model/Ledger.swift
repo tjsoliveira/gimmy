@@ -5,8 +5,8 @@ enum WeightUnit: String, CaseIterable, Codable, Sendable {
 
     static let poundInKg = 0.45359237
 
-    /// Quick-add buttons under the load: each tap adds its value.
-    var quickAdds: [Double] { self == .lb ? [2.5, 5, 10, 20, 45] : [1, 2.5, 5, 10, 20] }
+    /// Quick-add chips under the load in the entry card: each tap adds its value.
+    var cardAdds: [Double] { self == .lb ? [2.5, 5, 10] : [1, 2.5, 5] }
 
     func defaultStep(for load: Double?) -> Double {
         switch self {
