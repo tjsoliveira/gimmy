@@ -15,6 +15,7 @@ struct SetRowView: View {
             Button(action: onSelect) { content }
                 .buttonStyle(.plain)
                 .accessibilityHint(set.isRegistered ? "Abre a série para editar" : "Seleciona a série para registrar")
+                .accessibilityIdentifier(set.isRegistered ? "set.done" : "set.pending")
         }
     }
 

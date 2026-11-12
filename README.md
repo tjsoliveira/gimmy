@@ -1,5 +1,7 @@
 # Gimmy
 
+> **Projeto pessoal.** Fiz o Gimmy para o meu uso, em cima da minha planilha de treinos. Não é um produto: não tem suporte, não aceita pedidos de funcionalidade e pode mudar a qualquer momento. O código fica aqui como referência para quem quiser montar algo parecido.
+
 App de iPhone para registrar treinos. É a versão nativa (SwiftUI) do artefato **Registro de Treino**: mesmas telas, mesmas regras, e a planilha **Controle de Treinos** no Google Drive continua sendo a base de dados. O app lê e grava direto nela pela API do Google Sheets.
 
 - iOS 17 ou mais novo, só iPhone.
@@ -13,6 +15,23 @@ App de iPhone para registrar treinos. É a versão nativa (SwiftUI) do artefato 
 - **Configurar**: cria e edita os treinos. Cada treino tem nome e vigência (início e fim; o atual fica sem fim), uma lista de exercícios em ordem e, em cada exercício, as séries (tipo e reps), o descanso alvo, a unidade e as notas. Um nome pode voltar com outra vigência (um plano novo de Costas, por exemplo) sem misturar com o antigo.
 
 As regras de cálculo são as mesmas do artefato: numeração de séries com drop e rest-pause (3.1, 3.2), descanso curto dentro da sequência (10 s depois de drop, 15 s depois de rest-pause), 1RM estimado (Brzycki até 10 reps, Epley acima), volume em kg sem aquecimento, recorde só quando o exercício também subiu.
+
+## Telas
+
+<table>
+  <tr>
+    <td align="center" width="33%"><img src="docs/screenshots/1-treino.png" alt="Tela de treino com o exercício aberto, cronômetro do treino e descanso" width="240"><br><sub>Treino do dia</sub></td>
+    <td align="center" width="33%"><img src="docs/screenshots/2-serie.png" alt="Painel de série com carga, reps e tipo" width="240"><br><sub>Registrar uma série</sub></td>
+    <td align="center" width="33%"><img src="docs/screenshots/3-historico.png" alt="Histórico de treinos por mês" width="240"><br><sub>Histórico</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/4-treinos.png" alt="Lista de treinos vigentes, programados e encerrados" width="240"><br><sub>Treinos e vigência</sub></td>
+    <td align="center"><img src="docs/screenshots/5-treino.png" alt="Treino com nome, vigência e exercícios" width="240"><br><sub>Configurar um treino</sub></td>
+    <td align="center"><img src="docs/screenshots/6-exercicio.png" alt="Séries de um exercício com tipo e reps" width="240"><br><sub>Séries de um exercício</sub></td>
+  </tr>
+</table>
+
+Os prints usam dados de exemplo, não a planilha de verdade. Para gerar de novo: **Actions › Screenshots › Run workflow**. O workflow abre o app num simulador de iPhone com o argumento `-demo` (só existe em build de debug), passa pelas telas e grava as imagens em `docs/screenshots`.
 
 ## Como a planilha é usada
 
@@ -102,6 +121,8 @@ Gimmy/
   Views/      telas SwiftUI
   Resources/  Info.plist, ícone e cor de destaque
 GimmyTests/   testes unitários das regras de treino (rodam no GitHub antes de gerar o IPA)
+GimmyUITests/ teste de interface que tira os prints do README (workflow Screenshots)
+docs/         prints do README
 project.yml   projeto do XcodeGen (o .xcodeproj é gerado, não versionado)
 ```
 

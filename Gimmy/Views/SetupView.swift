@@ -70,6 +70,7 @@ struct SetupView: View {
                     NavigationLink(value: PlanRoute.routine(v.id)) {
                         RoutineRow(version: v)
                     }
+                    .accessibilityIdentifier("routine.\(v.name)")
                 }
             }
             .listRowBackground(Color.appSurface)
@@ -241,6 +242,7 @@ struct RoutineDetailView: View {
                     NavigationLink(value: PlanRoute.exercise(routine: v.id, exercise: item.exercise)) {
                         PlanItemRow(item: item)
                     }
+                    .accessibilityIdentifier("planItem.\(item.exercise)")
                 }
                 .onMove { from, to in
                     var list = items

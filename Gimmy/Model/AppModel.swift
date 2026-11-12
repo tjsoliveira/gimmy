@@ -89,6 +89,9 @@ final class AppModel {
     // MARK: - Lifecycle
 
     func start() async {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-demo") { loadDemo(); return }
+        #endif
         guard config.isComplete else { phase = .needsConfig; return }
         guard auth.hasSession else { phase = .signedOut; return }
         await initialLoad()
@@ -135,6 +138,26 @@ final class AppModel {
             }
         }
     }
+
+    #if DEBUG
+    /// Sample data for the README screenshots: no Google account, nothing is written.
+    private func loadDemo() {
+        let tabs = DemoData.make()
+        var next = Ledger()
+        next.parsePlan(tabs.plan)
+        next.parseExercises(tabs.exercises)
+        next.parseRegistro(tabs.registro)
+        ledger = next
+        day = DayKey.from(Date())
+        routine = "Costas"
+        phase = .ready
+        if let row = tabs.restRow, let x = ledger.row(row) {
+            rest = RestState(row: x.row, exercise: x.exercise, day: x.day ?? day, start: Date().addingTimeInterval(-47),
+                             target: ledger.restTarget(exercise: x.exercise, routine: x.routine, day: day), alerted: false)
+        }
+        setSessionStart(Date().addingTimeInterval(-38 * 60), day: day, routine: "Costas")
+    }
+    #endif
 
     func reload() async {
         if let message = await perform("Recarregando…", write: false, {

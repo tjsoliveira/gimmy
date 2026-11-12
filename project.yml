@@ -46,6 +46,23 @@ targets:
     configFiles:
       Debug: Config/Base.xcconfig
       Release: Config/Base.xcconfig
+  GimmyUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: GimmyUITests
+    dependencies:
+      - target: Gimmy
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1"
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID).uitests
+        TEST_TARGET_NAME: Gimmy
+    configFiles:
+      Debug: Config/Base.xcconfig
+      Release: Config/Base.xcconfig
 schemes:
   Gimmy:
     build:
@@ -60,3 +77,13 @@ schemes:
         - GimmyTests
     archive:
       config: Release
+  # README screenshots only (.github/workflows/screenshots.yml); not part of the regular CI.
+  GimmyScreenshots:
+    build:
+      targets:
+        Gimmy: all
+        GimmyUITests: [test]
+    test:
+      config: Debug
+      targets:
+        - GimmyUITests
