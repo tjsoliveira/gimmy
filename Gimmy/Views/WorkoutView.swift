@@ -91,7 +91,6 @@ struct WorkoutView: View {
         let rows = model.currentRows
         let groups = model.ledger.groups(rows)
         let focused = model.focusedGroup
-        let focusedIndex = groups.firstIndex { $0.id == focused?.id }
 
         ProgressHeader(rows: rows)
 
@@ -111,7 +110,7 @@ struct WorkoutView: View {
             .buttonStyle(.plain)
         }
 
-        ForEach(Array(groups.enumerated()), id: \.element.id) { index, group in
+        ForEach(groups, id: \.id) { group in
             if group.id == focused?.id {
                 ExerciseCard(
                     group: group,
@@ -123,7 +122,7 @@ struct WorkoutView: View {
                 )
                 .id("g\(group.id)")
             } else {
-                CompactExerciseCard(group: group, isNext: focusedIndex.map { index == $0 + 1 } ?? false)
+                CompactExerciseCard(group: group)
                     .id("g\(group.id)")
             }
         }
@@ -319,7 +318,6 @@ private struct ExerciseCard: View {
 private struct CompactExerciseCard: View {
     @Environment(AppModel.self) private var model
     let group: ExerciseGroup
-    let isNext: Bool
 
     var body: some View {
         let done = group.rows.filter(\.isDone).count
@@ -331,7 +329,7 @@ private struct CompactExerciseCard: View {
             withAnimation(.smooth) { model.focus(group) }
         } label: {
             HStack(spacing: Spacing.sm) {
-                Image(systemName: complete ? "checkmark" : done > 0 ? "circle.lefthalf.filled" : "lock.fill")
+                Image(systemName: complete ? "checkmark" : done > 0 ? "circle.lefthalf.filled" : "circle")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(complete ? Color.statusSuccess : Color.textMuted)
                     .frame(width: 28, height: 28)
@@ -364,7 +362,7 @@ private struct CompactExerciseCard: View {
         let count = "\(total) \(total == 1 ? "série" : "séries")"
         if complete { return status.map { "\(count) · \($0.text)" } ?? count }
         if done > 0 { return "\(done) de \(group.rows.count) registradas" }
-        return "\(count) planejadas" + (isNext ? " · Próximo" : "")
+        return "\(count) planejadas"
     }
 }
 
