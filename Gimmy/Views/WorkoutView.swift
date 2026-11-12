@@ -26,10 +26,6 @@ struct WorkoutView: View {
                     guard let id else { return }
                     withAnimation(.smooth) { proxy.scrollTo("g\(id)", anchor: .top) }
                 }
-                .onChange(of: model.entry?.row.row) { _, row in
-                    guard let row else { return }
-                    withAnimation(.smooth) { proxy.scrollTo(row, anchor: .center) }
-                }
             }
             .background(Color.appBackground)
             .navigationTitle(model.routine ?? "Treino")
@@ -42,24 +38,9 @@ struct WorkoutView: View {
             .navigationDestination(for: String.self) { key in
                 SessionDetailView(key: key, allowsEditing: false)
             }
-            .safeAreaInset(edge: .bottom) {
-                VStack(spacing: 0) {
-                    RestTimerBar()
-                    if let entry = model.entry, !model.currentRows.isEmpty {
-                        QuickEntryCardView(
-                            draft: Binding(get: { model.entry ?? entry }, set: { model.entry = $0 }),
-                            onSave: saveEntry
-                        )
-                        .padding(.horizontal, Spacing.xs)
-                        .padding(.top, Spacing.xs)
-                        .padding(.bottom, Spacing.xxs)
-                        .background(Color.appBackground)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                    }
-                }
-                .animation(.smooth(duration: 0.25), value: model.entry?.row.row)
-            }
+            .safeAreaInset(edge: .bottom) { RestTimerBar() }
         }
+        .sheet(item: $model.entry) { _ in SetEditorSheet() }
         .sheet(isPresented: $model.addingExercise) { AddExerciseSheet() }
         .sheet(isPresented: $model.finishing) { FinishSheet() }
         .alert("Descanso depois desta série", isPresented: Binding(
@@ -165,11 +146,6 @@ struct WorkoutView: View {
             .buttonStyle(SecondaryButtonStyle(height: 48, foreground: .textSecondary, background: .appSurfaceLow))
             .disabled(model.busy != nil)
         }
-    }
-
-    private func saveEntry() {
-        guard let draft = model.entry else { return }
-        Task { model.entryError = await model.save(draft, clear: false) }
     }
 
     private func saveRest(_ row: SetRow) {
@@ -294,9 +270,6 @@ private struct ExerciseCard: View {
                         .font(AppFont.titleLarge)
                         .foregroundStyle(Color.textPrimary)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    if let selected = model.entry?.row, group.rows.contains(where: { $0.row == selected.row }) {
-                        SetActionsMenu(row: selected, onEditRest: onEditRest, onRemove: onRemove)
-                    }
                 }
                 Text(lastTime(ledger))
                     .font(AppFont.caption)
@@ -397,27 +370,7 @@ private struct CompactExerciseCard: View {
 
 // MARK: - Set actions
 
-/// The ⋯ menu in the exercise header acts on the selected set.
-private struct SetActionsMenu: View {
-    let row: SetRow
-    let onEditRest: (SetRow) -> Void
-    let onRemove: (SetRow) -> Void
-
-    var body: some View {
-        Menu {
-            SetActions(row: row, onEditRest: onEditRest, onRemove: onRemove)
-        } label: {
-            Image(systemName: "ellipsis")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(Color.textMuted)
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
-        }
-        .accessibilityLabel("Opções da série \(row.serie)")
-    }
-}
-
-/// Type, repeat last, rest, clear and remove for one set. Shared by the ⋯ menu and the long-press menu.
+/// Type, repeat last, rest, clear and remove for one set, in its long-press menu.
 private struct SetActions: View {
     @Environment(AppModel.self) private var model
     let row: SetRow

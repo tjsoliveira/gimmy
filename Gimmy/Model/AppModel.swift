@@ -46,7 +46,7 @@ final class AppModel {
     var tab: Tab = .workout
     var workoutPath: [String] = []
     var historyPath: [String] = []
-    /// The set the quick-entry card is editing.
+    /// The set open in the editor sheet.
     var entry: SetDraft?
     var entryError: String?
     /// Any row of the exercise shown open on the workout screen.
@@ -211,30 +211,24 @@ final class AppModel {
     func focus(_ group: ExerciseGroup) {
         guard busy == nil else { return }
         focusedRow = group.rows.first?.row
-        if let pending = group.rows.first(where: { !$0.isDone }) {
-            select(pending)
-        } else {
-            entry = nil
-        }
     }
 
-    /// Keeps the open exercise and the selected set valid after data changes,
-    /// selecting the first set still to log when nothing is selected.
+    /// Keeps the open exercise and the edited set valid after data changes.
     private func ensureSelection() {
         let rows = currentRows
         guard !rows.isEmpty else { entry = nil; focusedRow = nil; return }
         if let e = entry, !rows.contains(where: { $0.row == e.row.row && $0.exercise == e.row.exercise }) { entry = nil }
         if let f = focusedRow, !rows.contains(where: { $0.row == f }) { focusedRow = nil }
-        guard entry == nil else { return }
-        let pending = focusedGroup?.rows.first(where: { !$0.isDone }) ?? rows.first(where: { !$0.isDone })
-        if let pending { setEntry(pending) }
     }
 
-    /// After logging a set, moves the card to the next set still to log (wrapping around).
-    private func selectNext(after row: Int) {
+    /// Once an exercise has no sets left to log, opens the next one that has.
+    private func advanceFocus(after row: Int) {
         let rows = currentRows
+        let groups = ledger.groups(rows)
+        guard let group = groups.first(where: { $0.rows.contains { $0.row == row } }),
+              !group.rows.contains(where: { !$0.isDone }) else { return }
         let next = rows.first(where: { $0.row > row && !$0.isDone }) ?? rows.first(where: { !$0.isDone })
-        if let next { setEntry(next) } else { entry = nil }
+        if let next { focusedRow = next.row }
     }
 
     // MARK: - Workout
@@ -275,7 +269,6 @@ final class AppModel {
         setEntry(x)
     }
 
-    /// Same as `select` but also allowed while a sheet operation runs.
     private func setEntry(_ x: SetRow) {
         entry = draft(for: x)
         entryError = nil
@@ -353,9 +346,7 @@ final class AppModel {
             if unitChanged { try await self.setUnit(x.exercise, d.unit) }
 
             if kindChanged { self.ledger.renumber() }
-            if self.entry?.row.row == x.row {
-                if clear, let cleared = self.ledger.row(x.row) { self.setEntry(cleared) } else { self.entry = nil }
-            }
+            if self.entry?.row.row == x.row { self.entry = nil }
 
             guard let saved = self.ledger.row(x.row) else { return }
             if clear {
@@ -386,7 +377,7 @@ final class AppModel {
             return nil
         }
         if let error { return error }
-        if !clear && entry == nil { selectNext(after: x.row) }
+        if !clear { advanceFocus(after: x.row) }
         show(message)
         return nil
     }
@@ -442,7 +433,7 @@ final class AppModel {
         }
         if let error { return error }
         addingExercise = false
-        if let first = ledger.row(last.row + 1) { select(first) }
+        if let first = ledger.row(last.row + 1) { focusedRow = first.row }
         show("\(name) adicionado com \(sets) \(sets == 1 ? "série" : "séries").")
         return nil
     }
