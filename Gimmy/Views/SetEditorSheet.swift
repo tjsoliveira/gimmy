@@ -10,7 +10,8 @@ struct SetEditorSheet: View {
     var body: some View {
         NavigationStack {
             if let current = model.entry {
-                let draft = Binding(get: { model.entry ?? current }, set: { model.entry = $0 })
+                // Writes only while the editor is open: a late write from a closing field must not reopen a saved set.
+                let draft = Binding(get: { model.entry ?? current }, set: { if model.entry != nil { model.entry = $0 } })
                 ScrollView {
                     VStack(spacing: Spacing.md) {
                         QuickEntryCardView(draft: draft, onSave: save)

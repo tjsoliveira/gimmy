@@ -640,6 +640,7 @@ final class AppModel {
         tab = .history
         historyPath = [z.key]
         show("Treino finalizado · \(Fmt.minutes(minutes)).")
+        Task { await resync() }
         return nil
     }
 
@@ -783,8 +784,19 @@ final class AppModel {
             try await operation()
             return nil
         } catch {
+            if write, let e = error as? SheetsError, e.isUncertain {
+                // The write may have reached the sheet: re-read it so the list shows what was saved.
+                Task { await self.resync() }
+            }
             return describe(error, write: write)
         }
+    }
+
+    /// Re-reads the Registro tab in the background, keeping the screen as is if it fails.
+    private func resync() async {
+        guard phase == .ready, let values = try? await sheets.values("Registro!A1:Q") else { return }
+        ledger.parseRegistro(values)
+        ensureSelection()
     }
 
     private func describe(_ error: Error, write: Bool) -> String {
@@ -797,7 +809,7 @@ final class AppModel {
             return signInError ?? ""
         }
         if write, let e = error as? SheetsError, e.isUncertain {
-            return "Não sei se gravou. Puxe a lista para recarregar e confira antes de salvar de novo."
+            return "A conexão caiu e não sei se gravou. Estou relendo a planilha: confira se a série aparece como concluída antes de salvar de novo."
         }
         return error.localizedDescription
     }
