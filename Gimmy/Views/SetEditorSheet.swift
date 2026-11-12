@@ -30,6 +30,8 @@ struct SetEditorSheet: View {
                     }
                 }
                 .dismissKeyboardToolbar()
+                // The rest clock keeps running while a set is edited.
+                .safeAreaInset(edge: .bottom) { RestTimerBar() }
                 .confirmationDialog("Remover esta série?", isPresented: $confirmingRemoval, titleVisibility: .visible) {
                     Button("Remover série", role: .destructive) {
                         Task { model.entryError = await model.remove(current) }
@@ -63,6 +65,9 @@ struct SetEditorSheet: View {
                     let on = SetType(kind: draft.wrappedValue.kind) == type
                     Button {
                         draft.wrappedValue.kind = type.sheetValue
+                        if type == .restPause, draft.wrappedValue.minis.isEmpty, !model.ledger.hasContinuation(row) {
+                            addMini(draft)
+                        }
                     } label: {
                         HStack(spacing: 6) {
                             Circle().fill(type.tintColor).frame(width: 6, height: 6)
@@ -80,6 +85,10 @@ struct SetEditorSheet: View {
                     .buttonStyle(.plain)
                     .accessibilityAddTraits(on ? .isSelected : [])
                 }
+            }
+
+            if draft.wrappedValue.kind == SetKind.restPause {
+                restPauseParts(draft)
             }
 
             if let last = draft.wrappedValue.last {
@@ -102,7 +111,7 @@ struct SetEditorSheet: View {
                         .buttonStyle(StepperButtonStyle())
                         .accessibilityLabel("Menos 15 segundos")
                     TextField("sem registro", text: draft.rest)
-                        .keyboardType(.numbersAndPunctuation)
+                        .keyboardType(.numberPad)
                         .multilineTextAlignment(.center)
                         .font(AppFont.number(22))
                         .monospacedDigit()
@@ -114,6 +123,9 @@ struct SetEditorSheet: View {
                         .buttonStyle(StepperButtonStyle())
                         .accessibilityLabel("Mais 15 segundos")
                 }
+                Text("Digite só números: 130 vira 1:30, 45 vira 0:45.")
+                    .font(AppFont.caption)
+                    .foregroundStyle(Color.textMuted)
             }
         }
         .appCard()
@@ -138,6 +150,75 @@ struct SetEditorSheet: View {
         }
     }
 
+    /// Rest-pause parts after this set, logged in the same save.
+    @ViewBuilder
+    private func restPauseParts(_ draft: Binding<SetDraft>) -> some View {
+        let row = draft.wrappedValue.row
+        let unit = draft.wrappedValue.unit.rawValue
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            Text("Mini-séries do rest-pause").captionLabel()
+                .padding(.top, Spacing.xs)
+            if model.ledger.hasContinuation(row) {
+                Text("As mini-séries deste rest-pause já estão na lista do exercício. Toque nelas para editar.")
+                    .font(AppFont.caption)
+                    .foregroundStyle(Color.textSecondary)
+            } else {
+                ForEach(Array(draft.wrappedValue.minis.enumerated()), id: \.element.id) { index, mini in
+                    HStack(spacing: Spacing.xs) {
+                        Text("\(row.serie.isEmpty ? "•" : row.serie).\(index + 1)")
+                            .font(AppFont.number(13))
+                            .foregroundStyle(Color.setRestPause)
+                            .frame(width: 34)
+                        MiniField(text: miniBinding(draft, mini.id, \.load), keyboard: .decimalPad, suffix: unit,
+                                  label: "Carga da mini-série \(index + 1)")
+                        Text("×").foregroundStyle(Color.textMuted)
+                        MiniField(text: miniBinding(draft, mini.id, \.reps), keyboard: .numberPad, suffix: "reps",
+                                  label: "Reps da mini-série \(index + 1)")
+                        Button {
+                            draft.wrappedValue.minis.removeAll { $0.id == mini.id }
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(Color.textMuted)
+                                .frame(width: 36, height: 44)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Tirar a mini-série \(index + 1)")
+                    }
+                }
+                Button {
+                    addMini(draft)
+                } label: {
+                    Label("Adicionar mini-série", systemImage: "plus")
+                }
+                .buttonStyle(SecondaryButtonStyle(height: 40))
+                Text("Salvar grava a série e as mini-séries de uma vez, com 15 s de descanso entre elas.")
+                    .font(AppFont.caption)
+                    .foregroundStyle(Color.textMuted)
+            }
+        }
+    }
+
+    private func addMini(_ draft: Binding<SetDraft>) {
+        let d = draft.wrappedValue
+        let load = d.minis.last?.load ?? d.load
+        let baseReps = Int(d.minis.last?.reps ?? d.reps) ?? 10
+        let reps = d.minis.isEmpty ? RestPause.suggestedReps(after: baseReps) : baseReps
+        draft.wrappedValue.minis.append(MiniSet(load: load, reps: String(reps)))
+    }
+
+    private func miniBinding(_ draft: Binding<SetDraft>, _ id: UUID, _ field: WritableKeyPath<MiniSet, String>) -> Binding<String> {
+        Binding(
+            get: { draft.wrappedValue.minis.first { $0.id == id }?[keyPath: field] ?? "" },
+            set: { value in
+                if let i = draft.wrappedValue.minis.firstIndex(where: { $0.id == id }) {
+                    draft.wrappedValue.minis[i][keyPath: field] = value
+                }
+            }
+        )
+    }
+
     private func bumpRest(_ draft: Binding<SetDraft>, _ delta: Int) {
         let next: Int
         if case .seconds(let current) = RestInput.parse(draft.wrappedValue.rest) {
@@ -146,5 +227,31 @@ struct SetEditorSheet: View {
             next = model.ledger.restTarget(exercise: draft.wrappedValue.row.exercise, routine: model.routine)
         }
         draft.wrappedValue.rest = Fmt.duration(Double(next))
+    }
+}
+
+/// Small numeric field used by the rest-pause parts.
+private struct MiniField: View {
+    @Binding var text: String
+    let keyboard: UIKeyboardType
+    let suffix: String
+    let label: String
+
+    var body: some View {
+        HStack(spacing: 4) {
+            TextField("—", text: $text)
+                .keyboardType(keyboard)
+                .multilineTextAlignment(.trailing)
+                .font(AppFont.number(17))
+                .monospacedDigit()
+                .foregroundStyle(Color.textPrimary)
+                .accessibilityLabel(label)
+            Text(suffix)
+                .font(AppFont.caption)
+                .foregroundStyle(Color.textMuted)
+        }
+        .padding(.horizontal, Spacing.xs)
+        .frame(maxWidth: .infinity, minHeight: 44)
+        .background(Color.appSurfaceLow, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
     }
 }

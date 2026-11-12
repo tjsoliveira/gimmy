@@ -121,3 +121,5 @@ components:
 - **Fonte:** o app usa SF Pro (fonte do sistema) no lugar da Inter, como nos componentes de referência; números em SF Pro Rounded.
 - **Tela de treino:** foco no exercício atual. O exercício com séries pendentes fica aberto; tocar numa série abre o painel de edição (Entrada Rápida + opções da série); os demais aparecem como cards compactos (círculo vazio para os que não começaram, meio círculo para os em andamento, check para os concluídos). Tocar num card compacto abre o exercício; os exercícios podem ser feitos em qualquer ordem.
 - **Opções da série:** tipo, repetir a última, descanso, limpar e remover ficam no painel de edição, abaixo da Entrada Rápida, e também no toque longo em cada série.
+- **Séries:** concluídas ficam com fundo `surface-container-high`, badge preenchido na cor do tipo e check verde; séries com valores preenchidos e não salvos aparecem como "pré-definida" em índigo.
+- **Painel de série:** carga e reps em largura total (teclas de 56 pt, números de 40 pt), tipo, mini-séries do rest-pause, repetir a última e descanso; a barra de descanso continua visível no painel.

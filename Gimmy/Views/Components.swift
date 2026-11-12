@@ -16,7 +16,7 @@ struct SetBadge: View {
     var body: some View {
         ZStack {
             Circle()
-                .fill(filled ? type.tintColor.opacity(0.22) : Color.appSurfaceHigh)
+                .fill(filled ? type.tintColor : Color.appSurfaceHigh)
             Circle()
                 .stroke(type.tintColor, lineWidth: 1.5)
             Text(label)
@@ -24,7 +24,7 @@ struct SetBadge: View {
                 .monospacedDigit()
                 .minimumScaleFactor(0.7)
                 .lineLimit(1)
-                .foregroundStyle(type.tintColor)
+                .foregroundStyle(filled ? type.onTint : type.tintColor)
                 .padding(3)
         }
         .frame(width: 34, height: 34)

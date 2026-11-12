@@ -17,19 +17,6 @@ struct RestState: Codable, Equatable {
     var alerted: Bool
 }
 
-/// What the quick-entry card works on; saved only when the user taps Salvar série.
-struct SetDraft: Identifiable {
-    let row: SetRow
-    let last: SetRow?
-    var load: String
-    var reps: String
-    var kind: String
-    var unit: WeightUnit
-    var step: Double
-    var rest: String
-    var id: Int { row.row }
-}
-
 @MainActor
 @Observable
 final class AppModel {
@@ -49,6 +36,8 @@ final class AppModel {
     /// The set open in the editor sheet.
     var entry: SetDraft?
     var entryError: String?
+    /// Editor contents closed without saving, per set.
+    var drafts = DraftStore()
     /// Any row of the exercise shown open on the workout screen.
     var focusedRow: Int?
     var addingExercise = false
@@ -270,9 +259,30 @@ final class AppModel {
     }
 
     private func setEntry(_ x: SetRow) {
-        entry = draft(for: x)
+        if var kept = drafts.draft(for: x) {
+            kept.row = x
+            kept.last = ledger.lastSet(for: x)
+            entry = kept
+        } else {
+            entry = draft(for: x)
+        }
         entryError = nil
         focusedRow = x.row
+    }
+
+    /// The user closed the editor without saving: keep what they filled in for next time.
+    func dismissEditor() {
+        if let e = entry {
+            if e.differs(from: draft(for: e.row)) { drafts.stash(e) } else { drafts.remove(e.row.row) }
+        }
+        entry = nil
+        entryError = nil
+    }
+
+    /// A draft kept for this set, if any (shown as "pré-definida" in the list).
+    func preset(for x: SetRow) -> SetDraft? {
+        guard !x.isDone, let d = drafts.draft(for: x), d.differs(from: draft(for: x)) else { return nil }
+        return d
     }
 
     func draft(for x: SetRow) -> SetDraft {
@@ -315,10 +325,23 @@ final class AppModel {
                 newRest = s
             }
         }
+        // Rest-pause parts typed in the same editor become new rows right after this set.
+        var parts: [PlannedSet] = []
+        if !clear && d.kind == SetKind.restPause && !d.minis.isEmpty && !ledger.hasContinuation(x) {
+            var minis: [(load: Double, reps: Int)] = []
+            for m in d.minis {
+                guard let l = Parse.number(m.load), l >= 0, let r = Int(m.reps.trimmingCharacters(in: .whitespaces)), r > 0 else {
+                    return "Confira carga e reps das mini-séries do rest-pause."
+                }
+                minis.append((l, r))
+            }
+            parts = RestPause.parts(minis)
+        }
         RestAlerts.requestPermission()
 
         var conflict = false
         var message = ""
+        var restAnchor = x.row
         let error = await perform(clear ? "Limpando…" : "Salvando…", write: true) {
             guard try await self.verify(x) else {
                 try await self.loadRegistro()
@@ -334,6 +357,7 @@ final class AppModel {
                 y.kind = d.kind
                 if clear { y.load = nil } else { y.load = load; y.reps = reps }
             }
+            self.drafts.remove(x.row)
 
             let restChanged = restProvided && newRest != x.rest
             if restChanged {
@@ -345,6 +369,16 @@ final class AppModel {
             let unitChanged = !clear && d.unit != self.ledger.unit(of: x.exercise)
             if unitChanged { try await self.setUnit(x.exercise, d.unit) }
 
+            if !parts.isEmpty {
+                try await self.sheets.insertRows(sheetID: AppConfig.registroSheetID, after: x.row, count: parts.count)
+                self.shiftRest(after: x.row, by: parts.count)
+                self.drafts.shift(after: x.row, by: parts.count)
+                let values: [[OutCell]] = parts.map { [.blank, .blank, .blank, .text($0.kind), .number($0.load), .number(Double($0.reps))] }
+                try await self.sheets.update("Registro!A\(x.row + 1):F\(x.row + parts.count)", values)
+                try await self.loadRegistro()
+                restAnchor = x.row + parts.count
+            }
+
             if kindChanged { self.ledger.renumber() }
             if self.entry?.row.row == x.row { self.entry = nil }
 
@@ -352,17 +386,17 @@ final class AppModel {
             if clear {
                 message = "Série limpa."
             } else {
-                var parts = ["Série salva"]
+                var pieces = [self.ledgerPartsLabel(parts.count)]
                 if let delta = self.ledger.delta(saved, self.ledger.lastSet(for: saved)) {
-                    parts.append(delta.isUp ? "+\(Fmt.n1(delta.value)) no 1RM" : delta.isDown ? "−\(Fmt.n1(-delta.value)) no 1RM" : "igual à última")
+                    pieces.append(delta.isUp ? "+\(Fmt.n1(delta.value)) no 1RM" : delta.isDown ? "−\(Fmt.n1(-delta.value)) no 1RM" : "igual à última")
                 }
-                if restChanged { parts.append(newRest.map { "descanso \(Fmt.duration(Double($0)))" } ?? "descanso apagado") }
-                if unitChanged { parts.append("\(x.exercise) agora em \(d.unit.rawValue)") }
-                message = parts.joined(separator: " · ") + "."
+                if restChanged { pieces.append(newRest.map { "descanso \(Fmt.duration(Double($0)))" } ?? "descanso apagado") }
+                if unitChanged { pieces.append("\(x.exercise) agora em \(d.unit.rawValue)") }
+                message = pieces.joined(separator: " · ") + "."
             }
 
-            if !clear && !wasDone {
-                self.startRest(after: saved)
+            if !clear && (!wasDone || !parts.isEmpty) {
+                self.startRest(after: self.ledger.row(restAnchor) ?? saved)
                 let key = self.startKey(saved.day ?? self.day, saved.routine)
                 if self.defaults.object(forKey: key) == nil {
                     self.defaults.set(Date().timeIntervalSince1970 - 60, forKey: key)
@@ -377,9 +411,13 @@ final class AppModel {
             return nil
         }
         if let error { return error }
-        if !clear { advanceFocus(after: x.row) }
+        if !clear { advanceFocus(after: restAnchor) }
         show(message)
         return nil
+    }
+
+    private func ledgerPartsLabel(_ count: Int) -> String {
+        count == 0 ? "Série salva" : "Rest-pause salvo com \(count) \(count == 1 ? "mini-série" : "mini-séries")"
     }
 
     func addSet(to group: ExerciseGroup) async {
@@ -393,6 +431,7 @@ final class AppModel {
             }
             try await self.sheets.insertRows(sheetID: AppConfig.registroSheetID, after: last.row, count: 1)
             self.shiftRest(after: last.row, by: 1)
+            self.drafts.shift(after: last.row, by: 1)
             try await self.sheets.update("Registro!A\(last.row + 1):F\(last.row + 1)", [[.blank, .blank, .blank, .blank, .blank, .number(Double(last.reps ?? 10))]])
             try await self.loadRegistro()
         }
@@ -417,6 +456,7 @@ final class AppModel {
             }
             try await self.sheets.insertRows(sheetID: AppConfig.registroSheetID, after: last.row, count: sets)
             self.shiftRest(after: last.row, by: sets)
+            self.drafts.shift(after: last.row, by: sets)
             let values: [[OutCell]] = (0..<sets).map { i in
                 [.blank, .blank, i == 0 ? .text(name) : .blank, .blank, .blank, .number(Double(reps))]
             }
@@ -487,6 +527,7 @@ final class AppModel {
                 try await self.sheets.update("Registro!D\(x.row - 1)", [[.blank]])
             }
             try await self.sheets.deleteRow(sheetID: AppConfig.registroSheetID, row: x.row)
+            self.drafts.removeAndShift(x.row)
             if let rest = self.rest {
                 if rest.row == x.row {
                     self.dismissRest()

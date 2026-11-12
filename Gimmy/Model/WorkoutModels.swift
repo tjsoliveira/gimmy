@@ -41,6 +41,14 @@ enum SetType: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Text color on a solid fill of `tintColor`: dark on the light hues, white on the rest.
+    var onTint: Color {
+        switch self {
+        case .warmup, .restPause: return .textInverse
+        case .normal, .dropset, .failure: return .white
+        }
+    }
+
     var tintColor: Color {
         switch self {
         case .warmup: return .setWarmup
@@ -63,10 +71,13 @@ struct WorkoutSet: Identifiable {
     var isRegistered: Bool
     var note: String
     var delta: SetDelta?
+    /// Values filled in the editor but not saved yet.
+    var preset: SetDraft?
 
     var id: Int { row.row }
 
-    init(row: SetRow, ledger: Ledger) {
+    init(row: SetRow, ledger: Ledger, preset: SetDraft? = nil) {
+        self.preset = preset
         let last = ledger.lastSet(for: row)
         self.row = row
         orderLabel = row.serie.isEmpty ? "•" : row.serie

@@ -40,15 +40,18 @@ struct WorkoutView: View {
             }
             .safeAreaInset(edge: .bottom) { RestTimerBar() }
         }
-        .sheet(item: $model.entry) { _ in SetEditorSheet() }
+        .sheet(item: Binding(
+            get: { model.entry },
+            set: { if $0 == nil { model.dismissEditor() } else { model.entry = $0 } }
+        )) { _ in SetEditorSheet() }
         .sheet(isPresented: $model.addingExercise) { AddExerciseSheet() }
         .sheet(isPresented: $model.finishing) { FinishSheet() }
         .alert("Descanso depois desta série", isPresented: Binding(
             get: { restEditing != nil },
             set: { if !$0 { restEditing = nil } }
         )) {
-            TextField("min:seg, ex. 1:30", text: $restText)
-                .keyboardType(.numbersAndPunctuation)
+            TextField("ex.: 130 para 1:30", text: $restText)
+                .keyboardType(.numberPad)
             Button("Salvar") {
                 if let row = restEditing { saveRest(row) }
             }
@@ -257,7 +260,7 @@ private struct ExerciseCard: View {
 
     var body: some View {
         let ledger = model.ledger
-        let sets = group.rows.map { WorkoutSet(row: $0, ledger: ledger) }
+        let sets = group.rows.map { WorkoutSet(row: $0, ledger: ledger, preset: model.preset(for: $0)) }
 
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 6) {

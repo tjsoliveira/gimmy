@@ -93,6 +93,7 @@ Gimmy/
   Model/      regras de treino (Ledger), estado e ações (AppModel), aviso de descanso
   Views/      telas SwiftUI
   Resources/  Info.plist, ícone e cor de destaque
+GimmyTests/   testes unitários das regras de treino (rodam no GitHub antes de gerar o IPA)
 project.yml   projeto do XcodeGen (o .xcodeproj é gerado, não versionado)
 ```
 

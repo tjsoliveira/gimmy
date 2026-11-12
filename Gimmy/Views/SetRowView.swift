@@ -18,6 +18,11 @@ struct SetRowView: View {
         }
     }
 
+    private var repsText: String {
+        if !set.isRegistered, let reps = set.preset?.reps, !reps.isEmpty { return reps }
+        return set.targetReps.map(String.init) ?? "—"
+    }
+
     private var content: some View {
         HStack(spacing: 14) {
             SetBadge(label: set.orderLabel, type: set.type, filled: set.isRegistered)
@@ -28,41 +33,53 @@ struct SetRowView: View {
                         Text("\(Fmt.n(weight)) \(set.unit.rawValue)")
                             .font(AppFont.number(17))
                             .foregroundStyle(Color.textPrimary)
+                    } else if let preset = set.preset, let load = Parse.number(preset.load) {
+                        Text("\(Fmt.n(load)) \(preset.unit.rawValue)")
+                            .font(AppFont.number(17, weight: .semibold))
+                            .foregroundStyle(Color.textSecondary)
                     } else {
                         Text("— \(set.unit.rawValue)")
                             .font(AppFont.number(17, weight: .semibold))
                             .foregroundStyle(Color.textMuted)
                     }
-                    Text("× \(set.targetReps.map(String.init) ?? "—")")
+                    Text("× \(repsText)")
                         .font(AppFont.number(15, weight: .medium))
-                        .foregroundStyle(Color.textSecondary)
+                        .foregroundStyle(set.isRegistered ? Color.textPrimary.opacity(0.85) : Color.textSecondary)
                     if let delta = set.delta {
                         DeltaBadge(delta: delta)
                     }
                 }
                 .monospacedDigit()
 
-                Text("\(set.type.rawValue) · \(set.note)")
-                    .font(.system(size: 10, weight: .bold))
-                    .tracking(0.5)
-                    .foregroundStyle(set.type.tintColor.opacity(0.85))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                if set.preset != nil {
+                    Text("PRÉ-DEFINIDA · toque para registrar")
+                        .font(.system(size: 10, weight: .bold))
+                        .tracking(0.5)
+                        .foregroundStyle(Color.linearBlue)
+                        .lineLimit(1)
+                } else {
+                    Text("\(set.type.rawValue) · \(set.note)")
+                        .font(.system(size: 10, weight: .bold))
+                        .tracking(0.5)
+                        .foregroundStyle(set.type.tintColor.opacity(0.85))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
             }
 
             Spacer(minLength: 8)
 
-            if !readOnly && set.isRegistered {
-                Image(systemName: "pencil")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(isSelected ? Color.linearBlue : Color.textMuted)
-                    .accessibilityHidden(true)
+            if set.isRegistered {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(Color.statusSuccess)
+                    .accessibilityLabel("Concluída")
             }
         }
         .padding(.vertical, 6)
         .padding(.horizontal, 8)
         .frame(minHeight: 52)
-        .background(isSelected ? Color.linearBlueContainer : Color.clear,
+        .background(isSelected ? Color.linearBlueContainer : (set.isRegistered ? Color.appSurfaceHigh : Color.clear),
                     in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
             .stroke(isSelected ? Color.linearBlue.opacity(0.5) : Color.clear, lineWidth: 1))

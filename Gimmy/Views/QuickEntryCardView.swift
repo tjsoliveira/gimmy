@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Inline card that logs the selected set: load and reps steppers, quick chips, kg/lb toggle, save.
+/// Card that logs a set: full-width load and reps steppers, quick chips, kg/lb toggle, save.
 struct QuickEntryCardView: View {
     @Environment(AppModel.self) private var model
     @Binding var draft: SetDraft
@@ -11,8 +11,8 @@ struct QuickEntryCardView: View {
         VStack(spacing: Spacing.sm) {
             header
 
-            HStack(alignment: .top, spacing: Spacing.sm) {
-                StepperColumn(
+            VStack(spacing: Spacing.sm) {
+                StepperBlock(
                     title: "Carga (\(unit))",
                     text: $draft.load,
                     keyboard: .decimalPad,
@@ -27,7 +27,7 @@ struct QuickEntryCardView: View {
                     }
                 }
 
-                StepperColumn(
+                StepperBlock(
                     title: "Repetições",
                     text: $draft.reps,
                     keyboard: .numberPad,
@@ -36,7 +36,7 @@ struct QuickEntryCardView: View {
                     onDecrement: { bumpReps(-1) },
                     onIncrement: { bumpReps(1) }
                 ) {
-                    ForEach([8, 10, 12], id: \.self) { reps in
+                    ForEach([6, 8, 10, 12, 15], id: \.self) { reps in
                         QuickIncrementChip(title: "\(reps)") { draft.reps = String(reps) }
                             .accessibilityLabel("\(reps) reps")
                     }
@@ -129,8 +129,8 @@ struct QuickEntryCardView: View {
     }
 }
 
-/// Title, − value +, and a row of quick chips.
-private struct StepperColumn<Chips: View>: View {
+/// Title, a large − value + row, and a row of quick chips. Full card width.
+private struct StepperBlock<Chips: View>: View {
     let title: String
     @Binding var text: String
     let keyboard: UIKeyboardType
@@ -141,26 +141,26 @@ private struct StepperColumn<Chips: View>: View {
     @ViewBuilder let chips: () -> Chips
 
     var body: some View {
-        VStack(spacing: Spacing.xs) {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
             Text(title)
                 .captionLabel()
 
-            HStack(spacing: 4) {
+            HStack(spacing: Spacing.xs) {
                 Button(action: onDecrement) { Image(systemName: "minus") }
-                    .buttonStyle(CompactStepperStyle())
+                    .buttonStyle(LargeStepperStyle())
                     .accessibilityLabel(decrementLabel)
 
                 TextField("—", text: $text)
                     .keyboardType(keyboard)
                     .multilineTextAlignment(.center)
-                    .font(AppFont.number(26))
+                    .font(AppFont.number(40))
                     .monospacedDigit()
                     .foregroundStyle(Color.textPrimary)
-                    .frame(maxWidth: .infinity, minHeight: 36)
+                    .frame(maxWidth: .infinity, minHeight: 56)
                     .accessibilityLabel(title)
 
                 Button(action: onIncrement) { Image(systemName: "plus") }
-                    .buttonStyle(CompactStepperStyle())
+                    .buttonStyle(LargeStepperStyle())
                     .accessibilityLabel(incrementLabel)
             }
 
@@ -171,16 +171,15 @@ private struct StepperColumn<Chips: View>: View {
     }
 }
 
-/// 36 pt stepper key from the design; the hit area stays 44 pt tall.
-private struct CompactStepperStyle: ButtonStyle {
+/// 56 pt stepper key for the editor.
+private struct LargeStepperStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 14, weight: .bold))
+            .font(.system(size: 20, weight: .bold))
             .foregroundStyle(Color.textPrimary)
-            .frame(width: 36, height: 36)
+            .frame(width: 56, height: 56)
             .background(configuration.isPressed ? Color.appSurfaceHighest : Color.appSurfaceHigh,
-                        in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
-            .frame(height: 44)
+                        in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
             .contentShape(Rectangle())
     }
 }
@@ -192,13 +191,12 @@ struct QuickIncrementChip: View {
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(Color.textSecondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, minHeight: 36)
                 .background(Color.appSurfaceHigh, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
         }
         .buttonStyle(.plain)

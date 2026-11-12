@@ -28,12 +28,35 @@ targets:
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         CODE_SIGN_STYLE: Automatic
         ENABLE_PREVIEWS: YES
+  GimmyTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: GimmyTests
+    dependencies:
+      - target: Gimmy
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1"
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID).tests
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Gimmy.app/Gimmy
+        BUNDLE_LOADER: $(TEST_HOST)
+    configFiles:
+      Debug: Config/Base.xcconfig
+      Release: Config/Base.xcconfig
 schemes:
   Gimmy:
     build:
       targets:
         Gimmy: all
+        GimmyTests: [test]
     run:
       config: Debug
+    test:
+      config: Debug
+      targets:
+        - GimmyTests
     archive:
       config: Release

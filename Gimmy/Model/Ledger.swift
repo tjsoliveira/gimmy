@@ -6,7 +6,7 @@ enum WeightUnit: String, CaseIterable, Codable, Sendable {
     static let poundInKg = 0.45359237
 
     /// Quick-add chips under the load in the entry card: each tap adds its value.
-    var cardAdds: [Double] { self == .lb ? [2.5, 5, 10] : [1, 2.5, 5] }
+    var cardAdds: [Double] { self == .lb ? [2.5, 5, 10, 20, 45] : [1, 2.5, 5, 10, 20] }
 
     func defaultStep(for load: Double?) -> Double {
         switch self {
@@ -290,6 +290,12 @@ struct Ledger {
 
     func sets(exercise: String, day: String) -> [SetRow] {
         rows.filter { $0.exercise == exercise && $0.day == day && $0.isDone }
+    }
+
+    /// Whether the row right after `x` continues its series (X.1, X.2…).
+    func hasContinuation(_ x: SetRow) -> Bool {
+        guard let next = row(x.row + 1) else { return false }
+        return next.exercise == x.exercise && next.day == x.day && next.serie.contains(".")
     }
 
     func lastSet(for x: SetRow) -> SetRow? {
