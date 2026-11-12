@@ -1,13 +1,24 @@
 import SwiftUI
 
-/// One set line: semantic badge, load × reps, type and comparison note, compact action button.
+/// One set line: semantic badge, load × reps, type and comparison note. The whole row is the tap target.
 struct SetRowView: View {
     let set: WorkoutSet
     var isSelected = false
     var readOnly = false
-    var onRegister: () -> Void = {}
+    /// Tapping the row selects it: a pending set to fill in, a logged one to edit.
+    var onSelect: () -> Void = {}
 
     var body: some View {
+        if readOnly {
+            content
+        } else {
+            Button(action: onSelect) { content }
+                .buttonStyle(.plain)
+                .accessibilityHint(set.isRegistered ? "Abre a série para editar" : "Seleciona a série para registrar")
+        }
+    }
+
+    private var content: some View {
         HStack(spacing: 14) {
             SetBadge(label: set.orderLabel, type: set.type, filled: set.isRegistered)
 
@@ -41,28 +52,20 @@ struct SetRowView: View {
 
             Spacer(minLength: 8)
 
-            if !readOnly {
-                Button(action: onRegister) {
-                    Text(set.isRegistered ? "Editar" : "Registrar")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(isSelected ? Color.white : Color.textPrimary)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 7)
-                        .background(isSelected ? Color.linearBlue : Color.appSurfaceHigh,
-                                    in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
-                            .stroke(isSelected ? Color.clear : Color.appBorder, lineWidth: 1))
-                        .frame(minHeight: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(set.isRegistered ? "Editar série \(set.orderLabel)" : "Registrar série \(set.orderLabel)")
+            if !readOnly && set.isRegistered {
+                Image(systemName: "pencil")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(isSelected ? Color.linearBlue : Color.textMuted)
+                    .accessibilityHidden(true)
             }
         }
         .padding(.vertical, 6)
         .padding(.horizontal, 8)
+        .frame(minHeight: 52)
         .background(isSelected ? Color.linearBlueContainer : Color.clear,
                     in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
+            .stroke(isSelected ? Color.linearBlue.opacity(0.5) : Color.clear, lineWidth: 1))
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
     }

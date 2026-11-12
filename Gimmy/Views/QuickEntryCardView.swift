@@ -52,7 +52,7 @@ struct QuickEntryCardView: View {
                     } else {
                         Image(systemName: "checkmark").font(.system(size: 14, weight: .bold))
                     }
-                    Text(model.busy ?? "Salvar série")
+                    Text(model.busy ?? (draft.row.isDone ? "Salvar alterações" : "Salvar série"))
                 }
             }
             .buttonStyle(PrimaryButtonStyle())

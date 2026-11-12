@@ -313,7 +313,6 @@ private struct ExerciseCard: View {
                         model.select(set.row)
                     }
                     .id(set.row.row)
-                    .onTapGesture { model.select(set.row) }
                     .contextMenu {
                         SetActions(row: set.row, onEditRest: onEditRest, onRemove: onRemove)
                     }
