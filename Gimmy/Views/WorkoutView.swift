@@ -95,6 +95,7 @@ struct WorkoutView: View {
         let groups = model.ledger.groups(rows)
         let focused = model.focusedGroup
 
+        SessionClockRow()
         ProgressHeader(rows: rows)
 
         if let minutes = rows.first?.duration, let first = rows.first, let day = first.day {
@@ -246,6 +247,52 @@ private struct ProgressHeader: View {
             .animation(.smooth, value: fraction)
         }
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// Total workout time, ticking while today's workout is open.
+private struct SessionClockRow: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        switch model.sessionClock {
+        case .hidden:
+            EmptyView()
+        case .notStarted:
+            HStack {
+                Button {
+                    model.startClock()
+                } label: {
+                    Label("Iniciar cronômetro do treino", systemImage: "stopwatch")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.textPrimary)
+                        .padding(.horizontal, Spacing.sm)
+                        .frame(height: 36)
+                        .background(Color.appSurfaceHigh, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: Radius.md, style: .continuous).stroke(Color.appBorderDefault, lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                Spacer()
+            }
+        case .running(let start):
+            TimelineView(.periodic(from: start, by: 1)) { context in
+                HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
+                    Image(systemName: "stopwatch")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Color.linearBlue)
+                    Text(Fmt.clock(SessionClock.elapsed(since: start, now: context.date)))
+                        .font(AppFont.number(28))
+                        .foregroundStyle(Color.textPrimary)
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
+                    Text("Tempo de treino").captionLabel()
+                    Spacer()
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Tempo de treino")
+                .accessibilityValue(Fmt.clock(SessionClock.elapsed(since: start, now: context.date)))
+            }
+        }
     }
 }
 

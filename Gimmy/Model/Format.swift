@@ -151,6 +151,13 @@ enum Fmt {
         return "\(s / 60):" + String(format: "%02d", s % 60)
     }
 
+    /// Elapsed workout time: "42:13" under an hour, "1:05:09" above.
+    static func clock(_ seconds: TimeInterval) -> String {
+        let s = max(0, Int(seconds))
+        let h = s / 3600, m = (s % 3600) / 60, sec = s % 60
+        return h > 0 ? "\(h):" + String(format: "%02d:%02d", m, sec) : "\(m):" + String(format: "%02d", sec)
+    }
+
     static func minutes(_ m: Int?) -> String {
         guard let m else { return "—" }
         return m >= 60 ? "\(m / 60)h" + String(format: "%02d", m % 60) : "\(m) min"

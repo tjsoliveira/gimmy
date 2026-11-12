@@ -246,7 +246,7 @@ final class AppModel {
             try await self.sheets.update("Registro!A\(start):F\(start + values.count - 1)", values)
             try await self.loadRegistro()
             self.defaults.set(routine, forKey: "treino")
-            self.defaults.set(Date().timeIntervalSince1970, forKey: self.startKey(self.day, routine))
+            self.setSessionStart(Date(), day: self.day, routine: routine)
         }
         if let error { show(error, error: true); return }
         ensureSelection()
@@ -397,9 +397,9 @@ final class AppModel {
 
             if !clear && (!wasDone || !parts.isEmpty) {
                 self.startRest(after: self.ledger.row(restAnchor) ?? saved)
-                let key = self.startKey(saved.day ?? self.day, saved.routine)
-                if self.defaults.object(forKey: key) == nil {
-                    self.defaults.set(Date().timeIntervalSince1970 - 60, forKey: key)
+                let day = saved.day ?? self.day
+                if self.sessionStart(day: day, routine: saved.routine) == nil {
+                    self.setSessionStart(Date().addingTimeInterval(-60), day: day, routine: saved.routine)
                 }
             }
             if clear && self.rest?.row == x.row { self.dismissRest() }
@@ -569,10 +569,48 @@ final class AppModel {
     func suggestedDuration() -> Int? {
         guard let z = currentSession else { return nil }
         if let d = ledger.stats(z).duration { return d }
-        let started = defaults.double(forKey: startKey(z.day, z.routine))
-        guard started > 0 else { return nil }
-        let minutes = Int(((Date().timeIntervalSince1970 - started) / 60).rounded())
+        guard let started = sessionStart(day: z.day, routine: z.routine) else { return nil }
+        let minutes = Int((Date().timeIntervalSince(started) / 60).rounded())
         return minutes > 0 && minutes < 300 ? minutes : nil
+    }
+
+    // MARK: - Session clock
+
+    /// Bumped whenever a start time changes, so views reading it refresh.
+    private var clockVersion = 0
+
+    func sessionStart(day: String, routine: String) -> Date? {
+        _ = clockVersion
+        let t = defaults.double(forKey: startKey(day, routine))
+        return t > 0 ? Date(timeIntervalSince1970: t) : nil
+    }
+
+    private func setSessionStart(_ date: Date?, day: String, routine: String) {
+        if let date {
+            defaults.set(date.timeIntervalSince1970, forKey: startKey(day, routine))
+        } else {
+            defaults.removeObject(forKey: startKey(day, routine))
+        }
+        clockVersion += 1
+    }
+
+    /// Total-time clock for the workout on screen.
+    var sessionClock: SessionClock.State {
+        guard let routine else { return .hidden }
+        let rows = currentRows
+        return SessionClock.state(
+            start: sessionStart(day: day, routine: routine),
+            hasSession: !rows.isEmpty,
+            finished: rows.first?.duration != nil,
+            isToday: day == DayKey.from(Date()),
+            now: Date()
+        )
+    }
+
+    /// Starts the clock now, for a workout whose start time is unknown.
+    func startClock() {
+        guard let routine else { return }
+        setSessionStart(Date(), day: day, routine: routine)
     }
 
     func finish(minutes raw: String) async -> String? {
@@ -598,7 +636,7 @@ final class AppModel {
         if let error { return error }
         finishing = false
         dismissRest()
-        defaults.removeObject(forKey: startKey(z.day, z.routine))
+        setSessionStart(nil, day: z.day, routine: z.routine)
         tab = .history
         historyPath = [z.key]
         show("Treino finalizado · \(Fmt.minutes(minutes)).")
