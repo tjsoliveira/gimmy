@@ -231,11 +231,9 @@ final class AppModel {
 
     // MARK: - Focus & quick entry
 
-    /// The exercise shown open: the one holding `focusedRow`, else the first with sets left, else the last.
+    /// The exercise shown open; nil once every set is logged (see `Focus`).
     var focusedGroup: ExerciseGroup? {
-        let groups = ledger.groups(currentRows)
-        if let focusedRow, let g = groups.first(where: { $0.rows.contains { $0.row == focusedRow } }) { return g }
-        return groups.first(where: { $0.rows.contains { !$0.isDone } }) ?? groups.last
+        Focus.group(ledger.groups(currentRows), focusedRow: focusedRow)
     }
 
     func focus(_ group: ExerciseGroup) {
@@ -251,14 +249,10 @@ final class AppModel {
         if let f = focusedRow, !rows.contains(where: { $0.row == f }) { focusedRow = nil }
     }
 
-    /// Once an exercise has no sets left to log, opens the next one that has.
+    /// Once an exercise has no sets left to log, opens the next one that has, or closes it when it was the last.
     private func advanceFocus(after row: Int) {
         let rows = currentRows
-        let groups = ledger.groups(rows)
-        guard let group = groups.first(where: { $0.rows.contains { $0.row == row } }),
-              !group.rows.contains(where: { !$0.isDone }) else { return }
-        let next = rows.first(where: { $0.row > row && !$0.isDone }) ?? rows.first(where: { !$0.isDone })
-        if let next { focusedRow = next.row }
+        focusedRow = Focus.after(row, rows: rows, groups: ledger.groups(rows), current: focusedRow)
     }
 
     // MARK: - Workout
