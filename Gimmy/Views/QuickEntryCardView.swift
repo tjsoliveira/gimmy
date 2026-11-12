@@ -8,7 +8,7 @@ struct QuickEntryCardView: View {
 
     var body: some View {
         let unit = draft.unit.rawValue
-        VStack(spacing: Spacing.md) {
+        VStack(spacing: Spacing.sm) {
             header
 
             HStack(alignment: .top, spacing: Spacing.sm) {
@@ -67,13 +67,19 @@ struct QuickEntryCardView: View {
     }
 
     private var header: some View {
-        HStack {
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(Color.statusSuccess)
-                    .frame(width: 6, height: 6)
-                Text("Série \(draft.row.serie.isEmpty ? "•" : draft.row.serie) · \(SetType(kind: draft.kind).title)")
-                    .captionLabel(.textSecondary)
+        HStack(alignment: .center, spacing: Spacing.xs) {
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(Color.statusSuccess)
+                        .frame(width: 6, height: 6)
+                    Text("Série \(draft.row.serie.isEmpty ? "•" : draft.row.serie) · \(SetType(kind: draft.kind).title)")
+                        .captionLabel(.textSecondary)
+                        .lineLimit(1)
+                }
+                Text(draft.row.exercise)
+                    .font(AppFont.bodyBold)
+                    .foregroundStyle(Color.textPrimary)
                     .lineLimit(1)
             }
             Spacer()

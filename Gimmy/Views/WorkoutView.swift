@@ -24,7 +24,11 @@ struct WorkoutView: View {
                 .scrollDismissesKeyboard(.interactively)
                 .onChange(of: model.focusedGroup?.id) { _, id in
                     guard let id else { return }
-                    withAnimation(.smooth) { proxy.scrollTo(id, anchor: .top) }
+                    withAnimation(.smooth) { proxy.scrollTo("g\(id)", anchor: .top) }
+                }
+                .onChange(of: model.entry?.row.row) { _, row in
+                    guard let row else { return }
+                    withAnimation(.smooth) { proxy.scrollTo(row, anchor: .center) }
                 }
             }
             .background(Color.appBackground)
@@ -38,7 +42,23 @@ struct WorkoutView: View {
             .navigationDestination(for: String.self) { key in
                 SessionDetailView(key: key, allowsEditing: false)
             }
-            .safeAreaInset(edge: .bottom) { RestTimerBar() }
+            .safeAreaInset(edge: .bottom) {
+                VStack(spacing: 0) {
+                    RestTimerBar()
+                    if let entry = model.entry, !model.currentRows.isEmpty {
+                        QuickEntryCardView(
+                            draft: Binding(get: { model.entry ?? entry }, set: { model.entry = $0 }),
+                            onSave: saveEntry
+                        )
+                        .padding(.horizontal, Spacing.xs)
+                        .padding(.top, Spacing.xs)
+                        .padding(.bottom, Spacing.xxs)
+                        .background(Color.appBackground)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+                }
+                .animation(.smooth(duration: 0.25), value: model.entry?.row.row)
+            }
         }
         .sheet(isPresented: $model.addingExercise) { AddExerciseSheet() }
         .sheet(isPresented: $model.finishing) { FinishSheet() }
@@ -120,17 +140,10 @@ struct WorkoutView: View {
                     },
                     onRemove: { removing = $0 }
                 )
-                .id(group.id)
-
-                if let entry = model.entry, group.rows.contains(where: { $0.row == entry.row.row }) {
-                    QuickEntryCardView(
-                        draft: Binding(get: { model.entry ?? entry }, set: { model.entry = $0 }),
-                        onSave: saveEntry
-                    )
-                }
+                .id("g\(group.id)")
             } else {
                 CompactExerciseCard(group: group, isNext: focusedIndex.map { index == $0 + 1 } ?? false)
-                    .id(group.id)
+                    .id("g\(group.id)")
             }
         }
 
@@ -299,6 +312,7 @@ private struct ExerciseCard: View {
                     SetRowView(set: set, isSelected: model.entry?.row.row == set.row.row || model.highlightedRow == set.row.row) {
                         model.select(set.row)
                     }
+                    .id(set.row.row)
                     .onTapGesture { model.select(set.row) }
                     .contextMenu {
                         SetActions(row: set.row, onEditRest: onEditRest, onRemove: onRemove)
