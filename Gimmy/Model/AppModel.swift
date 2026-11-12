@@ -331,6 +331,7 @@ final class AppModel {
                 return
             }
             try await self.sheets.insertRows(sheetID: AppConfig.registroSheetID, after: last.row, count: 1)
+            self.shiftRest(after: last.row, by: 1)
             try await self.sheets.update("Registro!A\(last.row + 1):F\(last.row + 1)", [[.blank, .blank, .blank, .blank, .blank, .number(Double(last.reps ?? 10))]])
             try await self.loadRegistro()
         }
@@ -354,6 +355,7 @@ final class AppModel {
                 return
             }
             try await self.sheets.insertRows(sheetID: AppConfig.registroSheetID, after: last.row, count: sets)
+            self.shiftRest(after: last.row, by: sets)
             let values: [[OutCell]] = (0..<sets).map { i in
                 [.blank, .blank, i == 0 ? .text(name) : .blank, .blank, .blank, .number(Double(reps))]
             }
@@ -371,6 +373,76 @@ final class AppModel {
         if let error { return error }
         addingExercise = false
         show("\(name) adicionado com \(sets) \(sets == 1 ? "série" : "séries").")
+        return nil
+    }
+
+    /// Deletes the set's row. Date, routine, exercise name and duration live on the first row,
+    /// so they move to the next row first. Returns an error to show in the editor, or nil once it can close.
+    func remove(_ d: SetDraft) async -> String? {
+        let x = d.row
+        var conflict = false
+        var endsChain = false
+        let error = await perform("Removendo…", write: true) {
+            guard try await self.verify(x) else {
+                try await self.loadRegistro()
+                conflict = true
+                return
+            }
+            let start = max(2, x.row - 1)
+            let offset = x.row - start
+            let raw = try await self.sheets.values("Registro!A\(start):Q\(x.row + 1)")
+            func line(_ i: Int) -> [Cell] { i < raw.count ? raw[i] : [] }
+            func filled(_ c: Cell) -> Bool { c != .empty }
+            let previous: [Cell]? = offset > 0 ? line(0) : nil
+            let current = line(offset)
+            let next = line(offset + 1)
+
+            let sameSession = filled(next.at(5)) && Parse.day(next.at(12)) == x.day && Parse.text(next.at(13)) == x.routine
+            let sameExercise = sameSession && Parse.text(next.at(14)) == x.exercise
+            // Removing the last set of a drop or rest-pause chain would make the next set continue it;
+            // the set before goes back to normal.
+            if let previous {
+                endsChain = SetKind.chains(Parse.text(previous.at(3)))
+                    && Parse.day(previous.at(12)) == x.day
+                    && Parse.text(previous.at(14)) == x.exercise
+                    && !SetKind.chains(x.kind)
+            }
+
+            if sameSession {
+                let head: [OutCell] = [
+                    filled(current.at(0)) && !filled(next.at(0)) ? .number(Double(DayKey.serial(x.day ?? self.day))) : .skip,
+                    filled(current.at(1)) && !filled(next.at(1)) ? .text(Parse.text(current.at(1))) : .skip,
+                    sameExercise && filled(current.at(2)) && !filled(next.at(2)) ? .text(Parse.text(current.at(2))) : .skip,
+                ]
+                if head.contains(where: { if case .skip = $0 { return false } else { return true } }) {
+                    try await self.sheets.update("Registro!A\(x.row + 1):C\(x.row + 1)", [head])
+                }
+                if let minutes = Parse.minutes(current.at(16)), !filled(next.at(16)) {
+                    try await self.sheets.update("Registro!Q\(x.row + 1)", [[.number(Double(minutes) / 1440)]])
+                }
+            }
+            if endsChain {
+                try await self.sheets.update("Registro!D\(x.row - 1)", [[.blank]])
+            }
+            try await self.sheets.deleteRow(sheetID: AppConfig.registroSheetID, row: x.row)
+            if let rest = self.rest {
+                if rest.row == x.row {
+                    self.dismissRest()
+                } else if rest.row > x.row {
+                    self.rest?.row -= 1
+                    self.saveRest()
+                }
+            }
+            self.editing = nil
+            try await self.loadRegistro()
+        }
+        if conflict {
+            editing = nil
+            show("A planilha mudou desde que você abriu o app. Confira e tente de novo.", error: true)
+            return nil
+        }
+        if let error { return error }
+        show(endsChain ? "Série removida. A série anterior voltou a ser normal." : "Série removida.")
         return nil
     }
 
@@ -452,6 +524,13 @@ final class AppModel {
         }
     }
 
+    /// Rows inserted above the set being rested move it down; keep the timer pointing at the same set.
+    private func shiftRest(after row: Int, by count: Int) {
+        guard let rest, rest.row > row else { return }
+        self.rest?.row += count
+        saveRest()
+    }
+
     func dismissRest() {
         rest = nil
         defaults.removeObject(forKey: "rest")
@@ -462,7 +541,10 @@ final class AppModel {
         guard let state = rest, busy == nil else { return }
         let seconds = Int(Date().timeIntervalSince(state.start).rounded())
         dismissRest()
-        guard let x = ledger.row(state.row) else { return }
+        guard let x = ledger.rows.first(where: { $0.row == state.row && $0.exercise == state.exercise && $0.day == state.day }) else {
+            show("Não achei a série desse descanso (\(Fmt.duration(Double(seconds)))). Preencha no campo de descanso da série.", error: true)
+            return
+        }
         var ok = false
         var conflict = false
         _ = await perform("Registrando descanso…", write: true) {

@@ -6,6 +6,7 @@ struct SetEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var draft: SetDraft
     @State private var error: String?
+    @State private var confirmingRemoval = false
 
     init(draft: SetDraft) {
         _draft = State(initialValue: draft)
@@ -38,12 +39,23 @@ struct SetEditorSheet: View {
                         onDecrement: { bumpLoad(-draft.step) },
                         onIncrement: { bumpLoad(draft.step) }
                     )
-                    Picker("Incremento", selection: $draft.step) {
-                        ForEach(draft.unit.steps, id: \.self) { step in
-                            Text("±\(Fmt.n(step)) \(unit)").tag(step)
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 64), spacing: 8)], spacing: 8) {
+                        ForEach(draft.unit.quickAdds, id: \.self) { amount in
+                            Button {
+                                bumpLoad(amount)
+                            } label: {
+                                Text("+\(Fmt.n(amount)) \(unit)")
+                                    .font(.condensed(.subheadline))
+                                    .monospacedDigit()
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.8)
+                                    .frame(maxWidth: .infinity, minHeight: 32)
+                            }
+                            .buttonStyle(.bordered)
+                            .accessibilityLabel("Somar \(Fmt.n(amount)) \(unit)")
                         }
                     }
-                    .pickerStyle(.segmented)
+                    .padding(.vertical, 2)
                 }
 
                 Section("Reps") {
@@ -107,13 +119,17 @@ struct SetEditorSheet: View {
                     }
                 }
 
-                if row.isDone {
-                    Section {
+                Section {
+                    if row.isDone {
                         Button("Limpar série", role: .destructive) {
                             Task { error = await model.save(draft, clear: true) }
                         }
                         .disabled(model.busy != nil)
                     }
+                    Button("Remover série", role: .destructive) {
+                        confirmingRemoval = true
+                    }
+                    .disabled(model.busy != nil)
                 }
             }
             .scrollDismissesKeyboard(.interactively)
@@ -143,6 +159,14 @@ struct SetEditorSheet: View {
             }
         }
         .interactiveDismissDisabled(model.busy != nil)
+        .confirmationDialog("Remover esta série?", isPresented: $confirmingRemoval, titleVisibility: .visible) {
+            Button("Remover série", role: .destructive) {
+                Task { error = await model.remove(draft) }
+            }
+            Button("Cancelar", role: .cancel) {}
+        } message: {
+            Text("A série sai do treino e da planilha, e as seguintes deste exercício são renumeradas. Para só apagar a carga e manter a série no lugar, use Limpar série.")
+        }
         .onChange(of: draft.unit) { _, unit in
             draft.step = unit.defaultStep(for: Parse.number(draft.load))
         }

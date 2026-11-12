@@ -17,10 +17,11 @@ enum Cell: Decodable, Equatable, Sendable {
     }
 }
 
-/// A value written with valueInputOption=USER_ENTERED. An empty text clears the cell.
+/// A value written with valueInputOption=USER_ENTERED. An empty text clears the cell; `skip` leaves it as is.
 enum OutCell: Encodable, Sendable {
     case text(String)
     case number(Double)
+    case skip
 
     static let blank = OutCell.text("")
 
@@ -29,6 +30,7 @@ enum OutCell: Encodable, Sendable {
         switch self {
         case .text(let value): try container.encode(value)
         case .number(let value): try container.encode(value)
+        case .skip: try container.encodeNil()
         }
     }
 }
@@ -97,6 +99,24 @@ final class SheetsClient {
                 "insertDimension": [
                     "range": ["sheetId": sheetID, "dimension": "ROWS", "startIndex": after, "endIndex": after + count],
                     "inheritFromBefore": true,
+                ],
+            ]],
+        ]
+        _ = try await send(
+            method: "POST",
+            path: ":batchUpdate",
+            query: [],
+            body: try JSONSerialization.data(withJSONObject: body),
+            idempotent: false
+        )
+    }
+
+    /// Deletes 1-based row `row`.
+    func deleteRow(sheetID: Int, row: Int) async throws {
+        let body: [String: Any] = [
+            "requests": [[
+                "deleteDimension": [
+                    "range": ["sheetId": sheetID, "dimension": "ROWS", "startIndex": row - 1, "endIndex": row],
                 ],
             ]],
         ]
