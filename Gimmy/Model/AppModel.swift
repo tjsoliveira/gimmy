@@ -155,7 +155,7 @@ final class AppModel {
             rest = RestState(row: x.row, exercise: x.exercise, day: x.day ?? day, start: Date().addingTimeInterval(-47),
                              target: ledger.restTarget(exercise: x.exercise, routine: x.routine, day: day), alerted: false)
         }
-        setSessionStart(Date().addingTimeInterval(-38 * 60), day: day, routine: "Costas")
+        setClock(SessionClock.Record(since: Date().addingTimeInterval(-38 * 60)), day: day, routine: "Costas")
     }
     #endif
 
@@ -281,7 +281,7 @@ final class AppModel {
             try await self.sheets.update("Registro!A\(start):F\(start + values.count - 1)", values)
             try await self.loadRegistro()
             self.defaults.set(routine, forKey: "treino")
-            self.setSessionStart(Date(), day: self.day, routine: routine)
+            self.setClock(SessionClock.Record(since: Date()), day: self.day, routine: routine)
         }
         if let error { show(error, error: true); return }
         ensureSelection()
@@ -433,9 +433,9 @@ final class AppModel {
             if !clear && (!wasDone || !parts.isEmpty) {
                 self.startRest(after: self.ledger.row(restAnchor) ?? saved)
                 let day = saved.day ?? self.day
-                if self.sessionStart(day: day, routine: saved.routine) == nil {
-                    self.setSessionStart(Date().addingTimeInterval(-60), day: day, routine: saved.routine)
-                }
+                let clock = self.clockRecord(day: day, routine: saved.routine)
+                let next = SessionClock.Record.afterSetLogged(clock, now: Date())
+                if next != clock { self.setClock(next, day: day, routine: saved.routine) }
             }
             if clear && self.rest?.row == x.row { self.dismissRest() }
         }
@@ -604,27 +604,33 @@ final class AppModel {
     func suggestedDuration() -> Int? {
         guard let z = currentSession else { return nil }
         if let d = ledger.stats(z).duration { return d }
-        guard let started = sessionStart(day: z.day, routine: z.routine) else { return nil }
-        let minutes = Int((Date().timeIntervalSince(started) / 60).rounded())
+        guard let clock = clockRecord(day: z.day, routine: z.routine) else { return nil }
+        let minutes = Int((clock.elapsed(now: Date()) / 60).rounded())
         return minutes > 0 && minutes < 300 ? minutes : nil
     }
 
     // MARK: - Session clock
 
-    /// Bumped whenever a start time changes, so views reading it refresh.
+    /// Bumped whenever a clock changes, so views reading it refresh.
     private var clockVersion = 0
 
-    func sessionStart(day: String, routine: String) -> Date? {
+    /// The workout's clock, kept on the phone. Older versions stored only the start time under "start:".
+    func clockRecord(day: String, routine: String) -> SessionClock.Record? {
         _ = clockVersion
+        if let data = defaults.data(forKey: clockKey(day, routine)),
+           let record = try? JSONDecoder().decode(SessionClock.Record.self, from: data) {
+            return record
+        }
         let t = defaults.double(forKey: startKey(day, routine))
-        return t > 0 ? Date(timeIntervalSince1970: t) : nil
+        return t > 0 ? SessionClock.Record(since: Date(timeIntervalSince1970: t)) : nil
     }
 
-    private func setSessionStart(_ date: Date?, day: String, routine: String) {
-        if let date {
-            defaults.set(date.timeIntervalSince1970, forKey: startKey(day, routine))
+    private func setClock(_ record: SessionClock.Record?, day: String, routine: String) {
+        defaults.removeObject(forKey: startKey(day, routine))
+        if let record, let data = try? JSONEncoder().encode(record) {
+            defaults.set(data, forKey: clockKey(day, routine))
         } else {
-            defaults.removeObject(forKey: startKey(day, routine))
+            defaults.removeObject(forKey: clockKey(day, routine))
         }
         clockVersion += 1
     }
@@ -634,7 +640,7 @@ final class AppModel {
         guard let routine else { return .hidden }
         let rows = currentRows
         return SessionClock.state(
-            start: sessionStart(day: day, routine: routine),
+            record: clockRecord(day: day, routine: routine),
             hasSession: !rows.isEmpty,
             finished: rows.first?.duration != nil,
             isToday: day == DayKey.from(Date()),
@@ -645,7 +651,19 @@ final class AppModel {
     /// Starts the clock now, for a workout whose start time is unknown.
     func startClock() {
         guard let routine else { return }
-        setSessionStart(Date(), day: day, routine: routine)
+        setClock(SessionClock.Record(since: Date()), day: day, routine: routine)
+    }
+
+    /// Stops counting; the time so far is kept.
+    func pauseClock() {
+        guard let routine, let clock = clockRecord(day: day, routine: routine) else { return }
+        setClock(clock.paused(now: Date()), day: day, routine: routine)
+    }
+
+    /// Counts again from the time kept at the pause.
+    func resumeClock() {
+        guard let routine, let clock = clockRecord(day: day, routine: routine) else { return }
+        setClock(clock.resumed(now: Date()), day: day, routine: routine)
     }
 
     func finish(minutes raw: String) async -> String? {
@@ -671,7 +689,7 @@ final class AppModel {
         if let error { return error }
         finishing = false
         dismissRest()
-        setSessionStart(nil, day: z.day, routine: z.routine)
+        setClock(nil, day: z.day, routine: z.routine)
         tab = .history
         historyPath = [z.key]
         show("Treino finalizado · \(Fmt.minutes(minutes)).")
@@ -794,6 +812,7 @@ final class AppModel {
     }
 
     private func startKey(_ day: String, _ routine: String) -> String { "start:\(day)|\(routine)" }
+    private func clockKey(_ day: String, _ routine: String) -> String { "clock:\(day)|\(routine)" }
 
     private func mutate(_ row: Int, _ change: (inout SetRow) -> Void) {
         if let i = ledger.rows.firstIndex(where: { $0.row == row }) { change(&ledger.rows[i]) }

@@ -263,39 +263,70 @@ private struct SessionClockRow: View {
             EmptyView()
         case .notStarted:
             HStack {
-                Button {
-                    model.startClock()
-                } label: {
-                    Label("Iniciar cronômetro do treino", systemImage: "stopwatch")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Color.textPrimary)
-                        .padding(.horizontal, Spacing.sm)
-                        .frame(height: 36)
-                        .background(Color.appSurfaceHigh, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: Radius.md, style: .continuous).stroke(Color.appBorderDefault, lineWidth: 1))
-                }
-                .buttonStyle(.plain)
+                ClockChip(title: "Iniciar cronômetro do treino", systemImage: "stopwatch") { model.startClock() }
                 Spacer()
             }
-        case .running(let start):
-            TimelineView(.periodic(from: start, by: 1)) { context in
-                HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
-                    Image(systemName: "stopwatch")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Color.linearBlue)
-                    Text(Fmt.clock(SessionClock.elapsed(since: start, now: context.date)))
-                        .font(AppFont.number(28))
-                        .foregroundStyle(Color.textPrimary)
-                        .monospacedDigit()
-                        .contentTransition(.numericText())
-                    Text("Tempo de treino").captionLabel()
-                    Spacer()
+        case .running(let since, let counted):
+            TimelineView(.periodic(from: since, by: 1)) { context in
+                ClockLine(elapsed: SessionClock.elapsed(since: since, counted: counted, now: context.date), paused: false) {
+                    model.pauseClock()
                 }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Tempo de treino")
-                .accessibilityValue(Fmt.clock(SessionClock.elapsed(since: start, now: context.date)))
             }
+        case .paused(let elapsed):
+            ClockLine(elapsed: elapsed, paused: true) { model.resumeClock() }
         }
+    }
+}
+
+/// Elapsed time, its label, and the Pausar / Continuar button. Paused, the time stays put in gray.
+private struct ClockLine: View {
+    let elapsed: TimeInterval
+    let paused: Bool
+    let toggle: () -> Void
+
+    var body: some View {
+        HStack(spacing: Spacing.xs) {
+            HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
+                Image(systemName: paused ? "pause.circle" : "stopwatch")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(paused ? Color.textMuted : Color.linearBlue)
+                Text(Fmt.clock(elapsed))
+                    .font(AppFont.number(28))
+                    .foregroundStyle(paused ? Color.textSecondary : Color.textPrimary)
+                    .monospacedDigit()
+                    .contentTransition(.numericText())
+                Text(paused ? "Pausado" : "Tempo de treino").captionLabel()
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(paused ? "Tempo de treino, pausado" : "Tempo de treino")
+            .accessibilityValue(Fmt.clock(elapsed))
+
+            Spacer(minLength: Spacing.xs)
+
+            ClockChip(title: paused ? "Continuar" : "Pausar", systemImage: paused ? "play.fill" : "pause.fill", action: toggle)
+                .accessibilityLabel(paused ? "Continuar o cronômetro do treino" : "Pausar o cronômetro do treino")
+        }
+    }
+}
+
+/// Small secondary button used by the workout clock.
+private struct ClockChip: View {
+    let title: String
+    let systemImage: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Label(title, systemImage: systemImage)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Color.textPrimary)
+                .padding(.horizontal, Spacing.sm)
+                .frame(minHeight: 36)
+                .background(Color.appSurfaceHigh, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: Radius.md, style: .continuous).stroke(Color.appBorderDefault, lineWidth: 1))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
 
