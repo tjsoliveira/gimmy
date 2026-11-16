@@ -125,4 +125,5 @@ components:
 - **Tempo de treino:** cronômetro no topo da tela de treino enquanto o treino de hoje está aberto; some quando o treino é finalizado.
 - **Painel de série:** carga e reps em largura total (teclas de 56 pt, números de 40 pt), tipo, mini-séries do rest-pause, repetir a última e descanso; a barra de descanso continua visível no painel.
 - **Configurar:** lista de treinos agrupada em Vigentes, Programados e Encerrados. No treino: nome e vigência (início e fim opcionais) e os exercícios, que se reordenam em Reordenar e saem com o gesto de deslizar. No exercício: uma linha por série com o badge do tipo, o menu de tipo e − reps +, mais descanso alvo, unidade e notas. Com alterações não salvas, o botão de voltar vira Descartar e o Salvar aparece fixo embaixo.
+- **Histórico:** o treino de hoje ainda não finalizado mostra "em andamento" em índigo no lugar da variação de volume, que só aparece depois de Finalizar.
 - **Notas do exercício:** aparecem na tela de treino, logo abaixo da última vez, com um ícone de informação.

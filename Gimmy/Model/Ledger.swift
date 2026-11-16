@@ -384,6 +384,12 @@ struct Ledger {
 
     func session(_ key: String) -> Session? { sessions().first { $0.key == key } }
 
+    /// Today's workout before Finalizar: its volume is still partial, so it isn't compared with the last one yet.
+    /// Older sessions without a duration (never finalized) keep their comparison.
+    func isInProgress(_ z: Session, today: String) -> Bool {
+        z.day == today && !z.rows.contains { $0.duration != nil }
+    }
+
     func stats(_ z: Session) -> SessionStats {
         let done = z.rows.filter(\.isDone)
         let series = z.rows.filter { !$0.serie.contains(".") }

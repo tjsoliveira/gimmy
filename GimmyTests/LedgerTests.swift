@@ -103,6 +103,21 @@ final class LedgerTests: XCTestCase {
         XCTAssertEqual(l.plannedExercises(t).map(\.sets), [2, 2], "a drop part is not a new set")
     }
 
+    func testOnlyTodaysUnfinishedWorkoutIsInProgress() {
+        let l = makeLedger(registro: [
+            registroRow("09/11/2026", "Peito", "Supino", load: 40),
+            registroRow("12/11/2026", "Ombro", "Press", load: 40, durationMinutes: 55),
+            registroRow("16/11/2026", "Costas", "Row", load: 40),
+            registroRow("16/11/2026", "Costas", "Row", load: nil),
+        ])
+        let byDay = Dictionary(uniqueKeysWithValues: l.sessions().map { ($0.day, $0) })
+        let today = "2026-11-16"
+        XCTAssertEqual(byDay[today].map { l.isInProgress($0, today: today) }, true)
+        XCTAssertEqual(byDay["2026-11-12"].map { l.isInProgress($0, today: "2026-11-12") }, false, "finalized")
+        XCTAssertEqual(byDay["2026-11-09"].map { l.isInProgress($0, today: today) }, false,
+                       "an old session never finalized keeps its comparison")
+    }
+
     func testSessionsAndStats() {
         let l = makeLedger(registro: [
             registroRow("03/11/2026", "Costas", "Row", load: 40, restSeconds: 90, durationMinutes: 50),

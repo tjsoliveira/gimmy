@@ -17,6 +17,8 @@ final class ScreenshotTests: XCTestCase {
         settle()
         snap("1-treino")
 
+        // The rest clock only shows in the first screenshot.
+        app.buttons["Descartar este descanso sem registrar"].tap()
         pending.tap()
         let cancel = app.buttons["Cancelar"]
         XCTAssertTrue(cancel.waitForExistence(timeout: 5))

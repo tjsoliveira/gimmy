@@ -20,7 +20,8 @@ struct HistoryView: View {
                             Section(month.title) {
                                 ForEach(month.sessions) { session in
                                     NavigationLink(value: session.key) {
-                                        HistoryRow(session: session, stats: model.ledger.stats(session))
+                                        HistoryRow(session: session, stats: model.ledger.stats(session),
+                                                   inProgress: model.ledger.isInProgress(session, today: DayKey.from(Date())))
                                     }
                                     .listRowBackground(Color.appSurface)
                                 }
@@ -64,6 +65,7 @@ struct HistoryView: View {
 private struct HistoryRow: View {
     let session: Session
     let stats: SessionStats
+    let inProgress: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -100,7 +102,11 @@ private struct HistoryRow: View {
 
     private var summary: Text {
         var text = Text("\(stats.doneSeries) \(stats.doneSeries == 1 ? "série" : "séries") · \(Fmt.n0(stats.volume)) kg")
-        if let change = stats.volumeChange {
+        if inProgress {
+            text = text + Text(" · em andamento")
+                .fontWeight(.semibold)
+                .foregroundColor(.linearBlue)
+        } else if let change = stats.volumeChange {
             text = text + Text(" \(Fmt.percent(change))")
                 .fontWeight(.semibold)
                 .foregroundColor(change >= 0 ? .statusSuccess : .statusDanger)
@@ -123,7 +129,7 @@ struct SessionDetailView: View {
                 List {
                     Section {
                         LabeledContent("Duração", value: Fmt.minutes(stats.duration))
-                        VolumeRow(stats: stats)
+                        VolumeRow(stats: stats, inProgress: model.ledger.isInProgress(session, today: DayKey.from(Date())))
                         LabeledContent("Séries", value: "\(stats.doneSeries)")
                         LabeledContent("Descanso médio", value: stats.averageRest.map(Fmt.duration) ?? "—")
                     } header: {

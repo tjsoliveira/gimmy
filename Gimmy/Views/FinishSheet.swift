@@ -102,12 +102,18 @@ struct FinishSheet: View {
 /// Volume with the change against the previous session of the same routine.
 struct VolumeRow: View {
     let stats: SessionStats
+    /// Today's workout not finalized yet: no comparison with the last one (see `Ledger.isInProgress`).
+    var inProgress = false
 
     var body: some View {
         LabeledContent("Volume") {
             VStack(alignment: .trailing, spacing: 2) {
                 Text("\(Fmt.n0(stats.volume)) kg")
-                if let change = stats.volumeChange, let previous = stats.previousDay {
+                if inProgress {
+                    Text("em andamento")
+                        .font(.caption)
+                        .foregroundStyle(Color.linearBlue)
+                } else if let change = stats.volumeChange, let previous = stats.previousDay {
                     Text("\(Fmt.percent(change)) vs \(Fmt.shortDay(previous))")
                         .font(.caption)
                         .foregroundStyle(change >= 0 ? Color.statusSuccess : Color.statusDanger)
