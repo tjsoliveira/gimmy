@@ -345,14 +345,28 @@ private struct ExerciseCard: View {
 
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 6) {
-                HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
-                    Image(systemName: "dumbbell.fill")
-                        .font(.system(size: 16))
-                        .foregroundStyle(Color.linearBlue)
-                    Text(group.exercise)
-                        .font(AppFont.titleLarge)
-                        .foregroundStyle(Color.textPrimary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                HStack(alignment: .top, spacing: Spacing.xs) {
+                    HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
+                        Image(systemName: "dumbbell.fill")
+                            .font(.system(size: 16))
+                            .foregroundStyle(Color.linearBlue)
+                        Text(group.exercise)
+                            .font(AppFont.titleLarge)
+                            .foregroundStyle(Color.textPrimary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    Button {
+                        withAnimation(.smooth) { model.collapseAll() }
+                    } label: {
+                        Image(systemName: "chevron.up")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Color.textSecondary)
+                            .frame(width: 28, height: 28)
+                            .background(Color.appSurfaceHigh, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+                            .contentShape(Rectangle().inset(by: -8))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Recolher \(group.exercise)")
                 }
                 Text(lastTime(ledger))
                     .font(AppFont.caption)

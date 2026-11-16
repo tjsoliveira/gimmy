@@ -17,6 +17,13 @@ final class FocusTests: XCTestCase {
         XCTAssertEqual(Focus.group(w.groups, focusedRow: 2)?.exercise, "A", "an exercise the user opened stays open")
     }
 
+    func testCollapsingClosesEveryExerciseUntilOneIsOpened() {
+        let w = workout(done: [2])
+        XCTAssertNil(Focus.group(w.groups, focusedRow: nil, collapsed: true), "even with sets left, none opens by itself")
+        XCTAssertNil(Focus.group(w.groups, focusedRow: 4, collapsed: true))
+        XCTAssertEqual(Focus.group(w.groups, focusedRow: 4, collapsed: false)?.exercise, "B")
+    }
+
     func testFinishingAnExerciseMovesToTheNextOne() {
         let w = workout(done: [2, 3])
         XCTAssertEqual(Focus.after(3, rows: w.rows, groups: w.groups, current: 3), 4)

@@ -41,6 +41,8 @@ final class AppModel {
     var drafts = DraftStore()
     /// Any row of the exercise shown open on the workout screen.
     var focusedRow: Int?
+    /// The user collapsed the open exercise: all show closed until one is opened again.
+    var allCollapsed = false
     var addingExercise = false
     var finishing = false
     var rest: RestState?
@@ -114,6 +116,7 @@ final class AppModel {
         dismissRest()
         entry = nil
         focusedRow = nil
+        allCollapsed = false
         ledger = Ledger()
         workoutPath = []
         historyPath = []
@@ -196,6 +199,7 @@ final class AppModel {
         defaults.set(value, forKey: "treino")
         entry = nil
         focusedRow = nil
+        allCollapsed = false
         ensureSelection()
     }
 
@@ -204,6 +208,7 @@ final class AppModel {
         if phase == .ready { pickRoutine() }
         entry = nil
         focusedRow = nil
+        allCollapsed = false
         ensureSelection()
     }
 
@@ -226,6 +231,7 @@ final class AppModel {
         tab = .workout
         entry = nil
         focusedRow = nil
+        allCollapsed = false
         ensureSelection()
     }
 
@@ -233,12 +239,19 @@ final class AppModel {
 
     /// The exercise shown open; nil once every set is logged (see `Focus`).
     var focusedGroup: ExerciseGroup? {
-        Focus.group(ledger.groups(currentRows), focusedRow: focusedRow)
+        Focus.group(ledger.groups(currentRows), focusedRow: focusedRow, collapsed: allCollapsed)
     }
 
     func focus(_ group: ExerciseGroup) {
         guard busy == nil else { return }
         focusedRow = group.rows.first?.row
+        allCollapsed = false
+    }
+
+    /// Closes the open exercise; none opens again until the user taps one.
+    func collapseAll() {
+        focusedRow = nil
+        allCollapsed = true
     }
 
     /// Keeps the open exercise and the edited set valid after data changes.
@@ -303,6 +316,7 @@ final class AppModel {
         }
         entryError = nil
         focusedRow = x.row
+        allCollapsed = false
     }
 
     /// The user closed the editor without saving: keep what they filled in for next time.
@@ -508,7 +522,10 @@ final class AppModel {
         }
         if let error { return error }
         addingExercise = false
-        if let first = ledger.row(last.row + 1) { focusedRow = first.row }
+        if let first = ledger.row(last.row + 1) {
+            focusedRow = first.row
+            allCollapsed = false
+        }
         show("\(name) adicionado com \(sets) \(sets == 1 ? "série" : "séries").")
         return nil
     }

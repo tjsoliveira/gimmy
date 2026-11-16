@@ -4,8 +4,10 @@ import Foundation
 /// with a check once all their sets are logged.
 enum Focus {
     /// The exercise holding `focusedRow` (the one the user opened), else the first with sets left.
-    /// Nil once every set is logged, so every exercise closes with its check.
-    static func group(_ groups: [ExerciseGroup], focusedRow: Int?) -> ExerciseGroup? {
+    /// Nil once every set is logged, so every exercise closes with its check, and nil while the user
+    /// has collapsed the open one (`collapsed`), until they open another.
+    static func group(_ groups: [ExerciseGroup], focusedRow: Int?, collapsed: Bool = false) -> ExerciseGroup? {
+        if collapsed { return nil }
         if let focusedRow, let g = groups.first(where: { $0.rows.contains { $0.row == focusedRow } }) { return g }
         return groups.first(where: { $0.rows.contains { !$0.isDone } })
     }
