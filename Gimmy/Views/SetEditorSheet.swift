@@ -194,7 +194,29 @@ struct SetEditorSheet: View {
                     Label("Adicionar mini-série", systemImage: "plus")
                 }
                 .buttonStyle(SecondaryButtonStyle(height: 40))
-                Text("Salvar grava a série e as mini-séries de uma vez, com 15 s de descanso entre elas.")
+                HStack(spacing: Spacing.xs) {
+                    Text("Pausa entre elas")
+                        .font(AppFont.body)
+                        .foregroundStyle(Color.textSecondary)
+                    Spacer(minLength: Spacing.xs)
+                    Button { bumpPause(draft, -5) } label: { Image(systemName: "minus") }
+                        .buttonStyle(StepperButtonStyle())
+                        .accessibilityLabel("Menos 5 segundos de pausa")
+                    TextField("0:15", text: draft.pause)
+                        .keyboardType(.numberPad)
+                        .multilineTextAlignment(.center)
+                        .font(AppFont.number(20))
+                        .monospacedDigit()
+                        .foregroundStyle(Color.textPrimary)
+                        .frame(width: 64, height: 44)
+                        .background(Color.appSurfaceLow, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+                        .accessibilityLabel("Pausa entre as mini-séries")
+                    Button { bumpPause(draft, 5) } label: { Image(systemName: "plus") }
+                        .buttonStyle(StepperButtonStyle())
+                        .accessibilityLabel("Mais 5 segundos de pausa")
+                }
+                .padding(.top, Spacing.xxs)
+                Text("Salvar grava a série e as mini-séries de uma vez, com essa pausa depois de cada uma. Depois da última, o descanso é o do relógio.")
                     .font(AppFont.caption)
                     .foregroundStyle(Color.textMuted)
             }
@@ -218,6 +240,12 @@ struct SetEditorSheet: View {
                 }
             }
         )
+    }
+
+    private func bumpPause(_ draft: Binding<SetDraft>, _ delta: Int) {
+        let current: Int
+        if case .seconds(let s) = RestInput.parse(draft.wrappedValue.pause) { current = s } else { current = RestPause.defaultPause }
+        draft.wrappedValue.pause = Fmt.duration(Double(min(600, max(5, current + delta))))
     }
 
     private func bumpRest(_ draft: Binding<SetDraft>, _ delta: Int) {

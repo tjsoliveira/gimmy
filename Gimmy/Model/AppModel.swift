@@ -347,7 +347,8 @@ final class AppModel {
             kind: x.kind,
             unit: unit,
             step: unit.defaultStep(for: load),
-            rest: rest
+            rest: rest,
+            pause: Fmt.duration(Double(ledger.lastRestPausePause(exercise: x.exercise, before: x.day ?? day) ?? RestPause.defaultPause))
         )
     }
 
@@ -385,6 +386,16 @@ final class AppModel {
                 minis.append((l, r))
             }
             parts = RestPause.parts(minis)
+        }
+        // The pause goes on the set and on every part but the last; it replaces the rest field.
+        var pause: Int?
+        if !parts.isEmpty {
+            restProvided = false
+            switch RestInput.parse(d.pause) {
+            case .empty: pause = nil
+            case .seconds(let s) where s > 0 && s <= 600: pause = s
+            default: return "Pausa entre as mini-séries: use segundos, por exemplo 10."
+            }
         }
         RestAlerts.requestPermission()
 
@@ -424,6 +435,11 @@ final class AppModel {
                 self.drafts.shift(after: x.row, by: parts.count)
                 let values: [[OutCell]] = parts.map { [.blank, .blank, .blank, .text($0.kind), .number($0.load), .number(Double($0.reps))] }
                 try await self.sheets.update("Registro!A\(x.row + 1):F\(x.row + parts.count)", values)
+                let pauseRows = RestPause.pauseRows(after: x.row, parts: parts.count)
+                if let pause, let first = pauseRows.first, let last = pauseRows.last {
+                    let cells: [[OutCell]] = pauseRows.map { _ in [.number(Double(pause) / 86400)] }
+                    try await self.sheets.update("Registro!P\(first):P\(last)", cells)
+                }
                 try await self.loadRegistro()
                 restAnchor = x.row + parts.count
             }
@@ -436,6 +452,7 @@ final class AppModel {
                 message = "Série limpa."
             } else {
                 var pieces = [self.ledgerPartsLabel(parts.count)]
+                if let pause, !parts.isEmpty { pieces.append("pausa de \(Fmt.duration(Double(pause))) entre elas") }
                 if let delta = self.ledger.delta(saved, self.ledger.lastSet(for: saved)) {
                     pieces.append(delta.isUp ? "+\(Fmt.n1(delta.value)) no 1RM" : delta.isDown ? "−\(Fmt.n1(-delta.value)) no 1RM" : "igual à última")
                 }

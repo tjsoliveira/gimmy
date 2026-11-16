@@ -21,12 +21,14 @@ struct SetDraft: Identifiable {
     var rest: String
     /// Rest-pause parts after this set; written as new rows on save.
     var minis: [MiniSet] = []
+    /// Pause between the rest-pause parts ("0:10"), written on the set and every part but the last.
+    var pause = ""
     var id: Int { row.row }
 
     /// True when the user typed or chose something different from what `other` holds.
     func differs(from other: SetDraft) -> Bool {
         load != other.load || reps != other.reps || kind != other.kind
-            || unit != other.unit || rest != other.rest || minis != other.minis
+            || unit != other.unit || rest != other.rest || minis != other.minis || pause != other.pause
     }
 }
 
@@ -76,6 +78,15 @@ struct PlannedSet: Equatable {
 }
 
 enum RestPause {
+    /// Pause between parts when the exercise has none recorded yet.
+    static let defaultPause = SetKind.chainRest(SetKind.restPause) ?? 15
+
+    /// Rows that get the pause when a set at `row` is saved with `parts` parts right after it:
+    /// the set and every part but the last, whose rest the clock measures.
+    static func pauseRows(after row: Int, parts: Int) -> [Int] {
+        parts > 0 ? Array(row..<(row + parts)) : []
+    }
+
     /// The rows written after a rest-pause set for its parts. Every part but the last stays
     /// Rest-pause so the chain continues (3.1, 3.2…); the last is normal so the next set starts a new series.
     static func parts(_ minis: [(load: Double, reps: Int)]) -> [PlannedSet] {

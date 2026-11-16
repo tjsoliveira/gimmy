@@ -6,6 +6,19 @@ final class DraftsTests: XCTestCase {
         SetRow(row: n, kind: "", load: nil, reps: 10, day: "2026-11-10", routine: "Costas", exercise: exercise)
     }
 
+    func testPauseGoesOnTheSetAndEveryPartButTheLast() {
+        XCTAssertEqual(RestPause.pauseRows(after: 10, parts: 2), [10, 11], "row 12, the last part, keeps the clock's rest")
+        XCTAssertEqual(RestPause.pauseRows(after: 10, parts: 1), [10])
+        XCTAssertEqual(RestPause.pauseRows(after: 10, parts: 0), [])
+    }
+
+    func testChangingThePauseCountsAsAnEdit() {
+        let base = draft(for: row(5))
+        var edited = base
+        edited.pause = "0:10"
+        XCTAssertTrue(edited.differs(from: base))
+    }
+
     func testUnsavedDraftIsKeptPerSet() {
         var store = DraftStore()
         store.stash(draft(for: row(5), load: "40"))

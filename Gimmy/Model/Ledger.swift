@@ -302,6 +302,17 @@ struct Ledger {
         return next.exercise == x.exercise && next.day == x.day && next.serie.contains(".")
     }
 
+    /// The pause between rest-pause parts the last time this exercise had one recorded, before `day`.
+    /// Only rows followed by another part count: the last part's rest is the rest after the whole set.
+    func lastRestPausePause(exercise: String, before day: String) -> Int? {
+        let pauses = rows.filter { x in
+            x.exercise == exercise && x.kind == SetKind.restPause && x.rest != nil
+                && (x.day.map { $0 < day } ?? false) && hasContinuation(x)
+        }
+        let latest = pauses.max { ($0.day ?? "", $0.row) < ($1.day ?? "", $1.row) }
+        return latest?.rest
+    }
+
     func lastSet(for x: SetRow) -> SetRow? {
         guard let day = x.day, let p = previousDay(exercise: x.exercise, before: day) else { return nil }
         return rows.first { $0.exercise == x.exercise && $0.day == p && $0.serie == x.serie && $0.isDone }

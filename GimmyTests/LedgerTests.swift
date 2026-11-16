@@ -12,6 +12,24 @@ final class LedgerTests: XCTestCase {
         XCTAssertFalse(l.hasContinuation(l.rows[5]))
     }
 
+    func testRestPausePauseComesFromTheLastChainOfTheExercise() {
+        let l = makeLedger(registro: [
+            registroRow("05/11/2026", "Ombro", "Raise", kind: SetKind.restPause, load: 10, reps: 8, restSeconds: 20),
+            registroRow("05/11/2026", "Ombro", "Raise", load: 10, reps: 4, restSeconds: 90),
+            registroRow("12/11/2026", "Ombro", "Raise", kind: SetKind.restPause, load: 10, reps: 8, restSeconds: 10),
+            registroRow("12/11/2026", "Ombro", "Raise", kind: SetKind.restPause, load: 10, reps: 4, restSeconds: 10),
+            registroRow("12/11/2026", "Ombro", "Raise", kind: SetKind.restPause, load: 10, reps: 3, restSeconds: 121),
+            registroRow("12/11/2026", "Ombro", "Press", load: 40, reps: 10),
+            registroRow("16/11/2026", "Ombro", "Raise", kind: SetKind.restPause, load: 10, reps: 8, restSeconds: 30),
+            registroRow("16/11/2026", "Ombro", "Raise", load: 10, reps: 4),
+        ])
+        XCTAssertEqual(l.lastRestPausePause(exercise: "Raise", before: "2026-11-16"), 10,
+                       "latest chain before the day; its last part (2:01) is the rest after the set, not a pause")
+        XCTAssertEqual(l.lastRestPausePause(exercise: "Raise", before: "2026-11-10"), 20)
+        XCTAssertNil(l.lastRestPausePause(exercise: "Press", before: "2026-11-16"))
+        XCTAssertEqual(RestPause.defaultPause, 15)
+    }
+
     func testChainRestTargets() {
         XCTAssertEqual(SetKind.chainRest(SetKind.drop), 10)
         XCTAssertEqual(SetKind.chainRest(SetKind.restPause), 15)
