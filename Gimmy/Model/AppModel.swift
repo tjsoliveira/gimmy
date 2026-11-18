@@ -348,8 +348,15 @@ final class AppModel {
             unit: unit,
             step: unit.defaultStep(for: load),
             rest: rest,
-            pause: Fmt.duration(Double(ledger.lastRestPausePause(exercise: x.exercise, before: x.day ?? day) ?? RestPause.defaultPause))
+            pause: SetKind.chains(x.kind) ? chainPause(kind: x.kind, for: x) : ""
         )
+    }
+
+    /// The pause offered between the parts of a drop or rest-pause: the last one recorded for the exercise,
+    /// else 10 s for a drop and 15 s for a rest-pause.
+    func chainPause(kind: String, for x: SetRow) -> String {
+        let seconds = ledger.lastChainPause(kind: kind, exercise: x.exercise, before: x.day ?? day) ?? ChainParts.defaultPause(kind)
+        return Fmt.duration(Double(seconds))
     }
 
     /// Returns an error to show next to the set, or nil once saved.
@@ -375,17 +382,18 @@ final class AppModel {
                 newRest = s
             }
         }
-        // Rest-pause parts typed in the same editor become new rows right after this set.
+        // Drop or rest-pause parts typed in the same editor become new rows right after this set.
         var parts: [PlannedSet] = []
-        if !clear && d.kind == SetKind.restPause && !d.minis.isEmpty && !ledger.hasContinuation(x) {
+        let isDrop = d.kind == SetKind.drop
+        if !clear && SetKind.chains(d.kind) && !d.minis.isEmpty && !ledger.hasContinuation(x) {
             var minis: [(load: Double, reps: Int)] = []
             for m in d.minis {
                 guard let l = Parse.number(m.load), l >= 0, let r = Int(m.reps.trimmingCharacters(in: .whitespaces)), r > 0 else {
-                    return "Confira carga e reps das mini-séries do rest-pause."
+                    return isDrop ? "Confira carga e reps dos drops." : "Confira carga e reps das mini-séries do rest-pause."
                 }
                 minis.append((l, r))
             }
-            parts = RestPause.parts(minis)
+            parts = ChainParts.parts(minis, kind: d.kind)
         }
         // The pause goes on the set and on every part but the last; it replaces the rest field.
         var pause: Int?
@@ -394,7 +402,7 @@ final class AppModel {
             switch RestInput.parse(d.pause) {
             case .empty: pause = nil
             case .seconds(let s) where s > 0 && s <= 600: pause = s
-            default: return "Pausa entre as mini-séries: use segundos, por exemplo 10."
+            default: return isDrop ? "Pausa entre os drops: use segundos, por exemplo 10." : "Pausa entre as mini-séries: use segundos, por exemplo 10."
             }
         }
         RestAlerts.requestPermission()
@@ -435,7 +443,7 @@ final class AppModel {
                 self.drafts.shift(after: x.row, by: parts.count)
                 let values: [[OutCell]] = parts.map { [.blank, .blank, .blank, .text($0.kind), .number($0.load), .number(Double($0.reps))] }
                 try await self.sheets.update("Registro!A\(x.row + 1):F\(x.row + parts.count)", values)
-                let pauseRows = RestPause.pauseRows(after: x.row, parts: parts.count)
+                let pauseRows = ChainParts.pauseRows(after: x.row, parts: parts.count)
                 if let pause, let first = pauseRows.first, let last = pauseRows.last {
                     let cells: [[OutCell]] = pauseRows.map { _ in [.number(Double(pause) / 86400)] }
                     try await self.sheets.update("Registro!P\(first):P\(last)", cells)
@@ -451,7 +459,7 @@ final class AppModel {
             if clear {
                 message = "Série limpa."
             } else {
-                var pieces = [self.ledgerPartsLabel(parts.count)]
+                var pieces = [self.ledgerPartsLabel(parts.count, drop: isDrop)]
                 if let pause, !parts.isEmpty { pieces.append("pausa de \(Fmt.duration(Double(pause))) entre elas") }
                 if let delta = self.ledger.delta(saved, self.ledger.lastSet(for: saved)) {
                     pieces.append(delta.isUp ? "+\(Fmt.n1(delta.value)) no 1RM" : delta.isDown ? "−\(Fmt.n1(-delta.value)) no 1RM" : "igual à última")
@@ -482,8 +490,10 @@ final class AppModel {
         return nil
     }
 
-    private func ledgerPartsLabel(_ count: Int) -> String {
-        count == 0 ? "Série salva" : "Rest-pause salvo com \(count) \(count == 1 ? "mini-série" : "mini-séries")"
+    private func ledgerPartsLabel(_ count: Int, drop: Bool) -> String {
+        if count == 0 { return "Série salva" }
+        if drop { return "Série e \(count) \(count == 1 ? "drop salvos" : "drops salvos")" }
+        return "Rest-pause salvo com \(count) \(count == 1 ? "mini-série" : "mini-séries")"
     }
 
     func addSet(to group: ExerciseGroup) async {

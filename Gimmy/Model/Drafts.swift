@@ -19,9 +19,9 @@ struct SetDraft: Identifiable {
     var unit: WeightUnit
     var step: Double
     var rest: String
-    /// Rest-pause parts after this set; written as new rows on save.
+    /// Drop or rest-pause parts after this set; written as new rows on save.
     var minis: [MiniSet] = []
-    /// Pause between the rest-pause parts ("0:10"), written on the set and every part but the last.
+    /// Pause between the drop or rest-pause parts ("0:10"), written on the set and every part but the last.
     var pause = ""
     var id: Int { row.row }
 
@@ -77,9 +77,10 @@ struct PlannedSet: Equatable {
     var reps: Int
 }
 
-enum RestPause {
-    /// Pause between parts when the exercise has none recorded yet.
-    static let defaultPause = SetKind.chainRest(SetKind.restPause) ?? 15
+/// Parts of a drop or rest-pause set typed in the same editor and written with it in one save.
+enum ChainParts {
+    /// Pause between parts when the exercise has none recorded: 10 s after a drop, 15 s in a rest-pause.
+    static func defaultPause(_ kind: String) -> Int { SetKind.chainRest(kind) ?? 15 }
 
     /// Rows that get the pause when a set at `row` is saved with `parts` parts right after it:
     /// the set and every part but the last, whose rest the clock measures.
@@ -87,14 +88,30 @@ enum RestPause {
         parts > 0 ? Array(row..<(row + parts)) : []
     }
 
-    /// The rows written after a rest-pause set for its parts. Every part but the last stays
-    /// Rest-pause so the chain continues (3.1, 3.2…); the last is normal so the next set starts a new series.
-    static func parts(_ minis: [(load: Double, reps: Int)]) -> [PlannedSet] {
+    /// The rows written after the set for its parts. Every part but the last keeps the set's kind (Drop or
+    /// Rest-pause) so the chain continues (3.1, 3.2…); the last is normal so the next set starts a new series.
+    static func parts(_ minis: [(load: Double, reps: Int)], kind: String) -> [PlannedSet] {
         minis.enumerated().map { i, m in
-            PlannedSet(kind: i == minis.count - 1 ? SetKind.normal : SetKind.restPause, load: m.load, reps: m.reps)
+            PlannedSet(kind: i == minis.count - 1 ? SetKind.normal : kind, load: m.load, reps: m.reps)
         }
     }
 
-    /// Suggested reps for a new part: about a third of the main set, at least 1.
+    /// Suggested reps for the first rest-pause part: about a third of the main set, at least 1.
     static func suggestedReps(after reps: Int) -> Int { max(1, Int((Double(reps) / 3).rounded())) }
+
+    /// A drop's load: about 20 % less than the one before, rounded down to the unit's step.
+    static func dropLoad(after load: Double, unit: WeightUnit) -> Double {
+        let target = load * 0.8
+        let step = unit.defaultStep(for: target)
+        return max(0, (target / step).rounded(.down) * step)
+    }
+
+    /// What a new part starts with. Rest-pause: the same load, a third of the reps for the first part.
+    /// Drop: about 20 % off the load, the same reps.
+    static func nextPart(kind: String, load: Double?, reps: Int, first: Bool, unit: WeightUnit) -> (load: Double?, reps: Int) {
+        if kind == SetKind.drop {
+            return (load.map { dropLoad(after: $0, unit: unit) }, max(1, reps))
+        }
+        return (load, first ? suggestedReps(after: reps) : max(1, reps))
+    }
 }

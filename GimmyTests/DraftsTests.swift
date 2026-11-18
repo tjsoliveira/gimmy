@@ -7,9 +7,9 @@ final class DraftsTests: XCTestCase {
     }
 
     func testPauseGoesOnTheSetAndEveryPartButTheLast() {
-        XCTAssertEqual(RestPause.pauseRows(after: 10, parts: 2), [10, 11], "row 12, the last part, keeps the clock's rest")
-        XCTAssertEqual(RestPause.pauseRows(after: 10, parts: 1), [10])
-        XCTAssertEqual(RestPause.pauseRows(after: 10, parts: 0), [])
+        XCTAssertEqual(ChainParts.pauseRows(after: 10, parts: 2), [10, 11], "row 12, the last part, keeps the clock's rest")
+        XCTAssertEqual(ChainParts.pauseRows(after: 10, parts: 1), [10])
+        XCTAssertEqual(ChainParts.pauseRows(after: 10, parts: 0), [])
     }
 
     func testChangingThePauseCountsAsAnEdit() {
@@ -56,15 +56,52 @@ final class DraftsTests: XCTestCase {
     }
 
     func testRestPausePartsEndTheChain() {
-        XCTAssertEqual(RestPause.parts([(40, 4), (40, 3)]).map(\.kind), [SetKind.restPause, ""])
-        XCTAssertEqual(RestPause.parts([(40, 4)]).map(\.kind), [""])
-        XCTAssertTrue(RestPause.parts([]).isEmpty)
-        XCTAssertEqual(RestPause.suggestedReps(after: 8), 3)
-        XCTAssertEqual(RestPause.suggestedReps(after: 1), 1)
+        XCTAssertEqual(ChainParts.parts([(40, 4), (40, 3)], kind: SetKind.restPause).map(\.kind), [SetKind.restPause, ""])
+        XCTAssertEqual(ChainParts.parts([(40, 4)], kind: SetKind.restPause).map(\.kind), [""])
+        XCTAssertTrue(ChainParts.parts([], kind: SetKind.restPause).isEmpty)
+        XCTAssertEqual(ChainParts.suggestedReps(after: 8), 3)
+        XCTAssertEqual(ChainParts.suggestedReps(after: 1), 1)
+    }
+
+    func testDropPartsEndTheChain() {
+        let parts = ChainParts.parts([(30, 8), (22.5, 8)], kind: SetKind.drop)
+        XCTAssertEqual(parts.map(\.kind), [SetKind.drop, ""], "the drops continue the series, the last one closes it")
+        XCTAssertEqual(parts.map(\.load), [30, 22.5])
+        XCTAssertEqual(ChainParts.defaultPause(SetKind.drop), 10)
+        XCTAssertEqual(ChainParts.defaultPause(SetKind.restPause), 15)
+    }
+
+    func testDropLoadTakesAboutAFifthOffOnTheUnitStep() {
+        XCTAssertEqual(ChainParts.dropLoad(after: 60, unit: .kg), 47.5)
+        XCTAssertEqual(ChainParts.dropLoad(after: 25, unit: .kg), 20)
+        XCTAssertEqual(ChainParts.dropLoad(after: 10, unit: .kg), 8, "light loads step by 1 kg")
+        XCTAssertEqual(ChainParts.dropLoad(after: 45, unit: .lb), 35)
+        XCTAssertEqual(ChainParts.dropLoad(after: 0, unit: .kg), 0)
+    }
+
+    func testNewPartStartsFromTheOneBefore() {
+        let drop = ChainParts.nextPart(kind: SetKind.drop, load: 50, reps: 8, first: true, unit: .kg)
+        XCTAssertEqual(drop.load, 40)
+        XCTAssertEqual(drop.reps, 8)
+        let restPause = ChainParts.nextPart(kind: SetKind.restPause, load: 50, reps: 9, first: true, unit: .kg)
+        XCTAssertEqual(restPause.load, 50)
+        XCTAssertEqual(restPause.reps, 3)
+        XCTAssertEqual(ChainParts.nextPart(kind: SetKind.restPause, load: 50, reps: 3, first: false, unit: .kg).reps, 3)
+        XCTAssertNil(ChainParts.nextPart(kind: SetKind.drop, load: nil, reps: 8, first: true, unit: .kg).load,
+                     "no load typed yet: the drop's load stays empty")
+    }
+
+    func testDropWrittenInOneSaveNumbersAsOneSeries() {
+        let parts = ChainParts.parts([(40, 8), (30, 6)], kind: SetKind.drop)
+        let rows = [registroRow("10/11/2026", "Costas", "Row", load: 50, reps: 10),
+                    registroRow("10/11/2026", "Costas", "Row", kind: SetKind.drop, load: 50, reps: 8)]
+            + parts.map { registroRow("10/11/2026", "Costas", "Row", kind: $0.kind, load: $0.load, reps: $0.reps) }
+            + [registroRow("10/11/2026", "Costas", "Row", load: 50, reps: 10)]
+        XCTAssertEqual(makeLedger(registro: rows).rows.map(\.serie), ["1", "2", "2.1", "2.2", "3"])
     }
 
     func testRestPauseWrittenInOneSaveNumbersAsOneSeries() {
-        let parts = RestPause.parts([(40, 4), (40, 3)])
+        let parts = ChainParts.parts([(40, 4), (40, 3)], kind: SetKind.restPause)
         let rows = [registroRow("10/11/2026", "Costas", "Row", load: 40, reps: 10),
                     registroRow("10/11/2026", "Costas", "Row", kind: SetKind.restPause, load: 40, reps: 8)]
             + parts.map { registroRow("10/11/2026", "Costas", "Row", kind: $0.kind, load: $0.load, reps: $0.reps) }

@@ -66,8 +66,9 @@ struct SetEditorSheet: View {
                     let on = SetType(kind: draft.wrappedValue.kind) == type
                     Button {
                         draft.wrappedValue.kind = type.sheetValue
-                        if type == .restPause, draft.wrappedValue.minis.isEmpty, !model.ledger.hasContinuation(row) {
-                            addMini(draft)
+                        if SetKind.chains(type.sheetValue), !model.ledger.hasContinuation(row) {
+                            draft.wrappedValue.pause = model.chainPause(kind: type.sheetValue, for: row)
+                            if draft.wrappedValue.minis.isEmpty { addMini(draft) }
                         }
                     } label: {
                         HStack(spacing: 6) {
@@ -88,8 +89,8 @@ struct SetEditorSheet: View {
                 }
             }
 
-            if draft.wrappedValue.kind == SetKind.restPause {
-                restPauseParts(draft)
+            if SetKind.chains(draft.wrappedValue.kind) {
+                chainParts(draft)
             }
 
             if let last = draft.wrappedValue.last {
@@ -151,30 +152,35 @@ struct SetEditorSheet: View {
         }
     }
 
-    /// Rest-pause parts after this set, logged in the same save.
+    /// Drop or rest-pause parts after this set, logged in the same save.
     @ViewBuilder
-    private func restPauseParts(_ draft: Binding<SetDraft>) -> some View {
+    private func chainParts(_ draft: Binding<SetDraft>) -> some View {
         let row = draft.wrappedValue.row
         let unit = draft.wrappedValue.unit.rawValue
+        let drop = draft.wrappedValue.kind == SetKind.drop
+        let tint = SetType(kind: draft.wrappedValue.kind).tintColor
         VStack(alignment: .leading, spacing: Spacing.xs) {
-            Text("Mini-séries do rest-pause").captionLabel()
+            Text(drop ? "Drops" : "Mini-séries do rest-pause").captionLabel()
                 .padding(.top, Spacing.xs)
             if model.ledger.hasContinuation(row) {
-                Text("As mini-séries deste rest-pause já estão na lista do exercício. Toque nelas para editar.")
+                Text(drop
+                     ? "Os drops desta série já estão na lista do exercício. Toque neles para editar."
+                     : "As mini-séries deste rest-pause já estão na lista do exercício. Toque nelas para editar.")
                     .font(AppFont.caption)
                     .foregroundStyle(Color.textSecondary)
             } else {
                 ForEach(Array(draft.wrappedValue.minis.enumerated()), id: \.element.id) { index, mini in
+                    let name = drop ? "do drop \(index + 1)" : "da mini-série \(index + 1)"
                     HStack(spacing: Spacing.xs) {
                         Text("\(row.serie.isEmpty ? "•" : row.serie).\(index + 1)")
                             .font(AppFont.number(13))
-                            .foregroundStyle(Color.setRestPause)
+                            .foregroundStyle(tint)
                             .frame(width: 34)
                         MiniField(text: miniBinding(draft, mini.id, \.load), keyboard: .decimalPad, suffix: unit,
-                                  label: "Carga da mini-série \(index + 1)")
+                                  label: "Carga \(name)")
                         Text("×").foregroundStyle(Color.textMuted)
                         MiniField(text: miniBinding(draft, mini.id, \.reps), keyboard: .numberPad, suffix: "reps",
-                                  label: "Reps da mini-série \(index + 1)")
+                                  label: "Reps \(name)")
                         Button {
                             draft.wrappedValue.minis.removeAll { $0.id == mini.id }
                         } label: {
@@ -185,24 +191,24 @@ struct SetEditorSheet: View {
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("Tirar a mini-série \(index + 1)")
+                        .accessibilityLabel("Tirar \(drop ? "o drop" : "a mini-série") \(index + 1)")
                     }
                 }
                 Button {
                     addMini(draft)
                 } label: {
-                    Label("Adicionar mini-série", systemImage: "plus")
+                    Label(drop ? "Adicionar drop" : "Adicionar mini-série", systemImage: "plus")
                 }
                 .buttonStyle(SecondaryButtonStyle(height: 40))
                 HStack(spacing: Spacing.xs) {
-                    Text("Pausa entre elas")
+                    Text(drop ? "Pausa entre os drops" : "Pausa entre elas")
                         .font(AppFont.body)
                         .foregroundStyle(Color.textSecondary)
                     Spacer(minLength: Spacing.xs)
                     Button { bumpPause(draft, -5) } label: { Image(systemName: "minus") }
                         .buttonStyle(StepperButtonStyle())
                         .accessibilityLabel("Menos 5 segundos de pausa")
-                    TextField("0:15", text: draft.pause)
+                    TextField(Fmt.duration(Double(ChainParts.defaultPause(draft.wrappedValue.kind))), text: draft.pause)
                         .keyboardType(.numberPad)
                         .multilineTextAlignment(.center)
                         .font(AppFont.number(20))
@@ -210,25 +216,33 @@ struct SetEditorSheet: View {
                         .foregroundStyle(Color.textPrimary)
                         .frame(width: 64, height: 44)
                         .background(Color.appSurfaceLow, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
-                        .accessibilityLabel("Pausa entre as mini-séries")
+                        .accessibilityLabel(drop ? "Pausa entre os drops" : "Pausa entre as mini-séries")
                     Button { bumpPause(draft, 5) } label: { Image(systemName: "plus") }
                         .buttonStyle(StepperButtonStyle())
                         .accessibilityLabel("Mais 5 segundos de pausa")
                 }
                 .padding(.top, Spacing.xxs)
-                Text("Salvar grava a série e as mini-séries de uma vez, com essa pausa depois de cada uma. Depois da última, o descanso é o do relógio.")
+                Text(drop
+                     ? "Salvar grava a série e os drops de uma vez, com essa pausa depois de cada um. Depois do último, o descanso é o do relógio."
+                     : "Salvar grava a série e as mini-séries de uma vez, com essa pausa depois de cada uma. Depois da última, o descanso é o do relógio.")
                     .font(AppFont.caption)
                     .foregroundStyle(Color.textMuted)
             }
         }
     }
 
+    /// A new part: a drop takes about 20 % off the load, a rest-pause part repeats it (see `ChainParts.nextPart`).
     private func addMini(_ draft: Binding<SetDraft>) {
         let d = draft.wrappedValue
-        let load = d.minis.last?.load ?? d.load
-        let baseReps = Int(d.minis.last?.reps ?? d.reps) ?? 10
-        let reps = d.minis.isEmpty ? RestPause.suggestedReps(after: baseReps) : baseReps
-        draft.wrappedValue.minis.append(MiniSet(load: load, reps: String(reps)))
+        let next = ChainParts.nextPart(
+            kind: d.kind,
+            load: Parse.number(d.minis.last?.load ?? d.load),
+            reps: Int(d.minis.last?.reps ?? d.reps) ?? 10,
+            first: d.minis.isEmpty,
+            unit: d.unit
+        )
+        if d.pause.isEmpty { draft.wrappedValue.pause = model.chainPause(kind: d.kind, for: d.row) }
+        draft.wrappedValue.minis.append(MiniSet(load: Fmt.loadInput(next.load), reps: String(next.reps)))
     }
 
     private func miniBinding(_ draft: Binding<SetDraft>, _ id: UUID, _ field: WritableKeyPath<MiniSet, String>) -> Binding<String> {
@@ -244,7 +258,11 @@ struct SetEditorSheet: View {
 
     private func bumpPause(_ draft: Binding<SetDraft>, _ delta: Int) {
         let current: Int
-        if case .seconds(let s) = RestInput.parse(draft.wrappedValue.pause) { current = s } else { current = RestPause.defaultPause }
+        if case .seconds(let s) = RestInput.parse(draft.wrappedValue.pause) {
+            current = s
+        } else {
+            current = ChainParts.defaultPause(draft.wrappedValue.kind)
+        }
         draft.wrappedValue.pause = Fmt.duration(Double(min(600, max(5, current + delta))))
     }
 
