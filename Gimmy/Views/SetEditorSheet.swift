@@ -6,18 +6,26 @@ struct SetEditorSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var confirmingRemoval = false
+    /// The drop or rest-pause part the card's steppers edit; nil for the set itself.
+    @State private var part: UUID?
 
     var body: some View {
         NavigationStack {
             if let current = model.entry {
                 // Writes only while the editor is open: a late write from a closing field must not reopen a saved set.
                 let draft = Binding(get: { model.entry ?? current }, set: { if model.entry != nil { model.entry = $0 } })
-                ScrollView {
-                    VStack(spacing: Spacing.md) {
-                        QuickEntryCardView(draft: draft, onSave: save)
-                        options(draft)
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(spacing: Spacing.md) {
+                            QuickEntryCardView(draft: draft, part: $part, onAddPart: { addMini(draft, select: true) }, onSave: save)
+                                .id("entry")
+                            options(draft) { id in
+                                part = id
+                                withAnimation(.smooth) { proxy.scrollTo("entry", anchor: .top) }
+                            }
+                        }
+                        .padding(Spacing.md)
                     }
-                    .padding(Spacing.md)
                 }
                 .scrollDismissesKeyboard(.interactively)
                 .background(Color.appBackground)
@@ -55,8 +63,9 @@ struct SetEditorSheet: View {
         Task { model.entryError = await model.save(draft, clear: false) }
     }
 
+    /// `select` opens a drop or rest-pause part in the card above.
     @ViewBuilder
-    private func options(_ draft: Binding<SetDraft>) -> some View {
+    private func options(_ draft: Binding<SetDraft>, select: @escaping (UUID) -> Void) -> some View {
         let row = draft.wrappedValue.row
 
         VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -90,7 +99,7 @@ struct SetEditorSheet: View {
             }
 
             if SetKind.chains(draft.wrappedValue.kind) {
-                chainParts(draft)
+                chainParts(draft, select: select)
             }
 
             if let last = draft.wrappedValue.last {
@@ -152,9 +161,10 @@ struct SetEditorSheet: View {
         }
     }
 
-    /// Drop or rest-pause parts after this set, logged in the same save.
+    /// Drop or rest-pause parts after this set, logged in the same save. Each is edited in the card above;
+    /// here they are listed to pick or remove, with the pause between them.
     @ViewBuilder
-    private func chainParts(_ draft: Binding<SetDraft>) -> some View {
+    private func chainParts(_ draft: Binding<SetDraft>, select: @escaping (UUID) -> Void) -> some View {
         let row = draft.wrappedValue.row
         let unit = draft.wrappedValue.unit.rawValue
         let drop = draft.wrappedValue.kind == SetKind.drop
@@ -170,18 +180,38 @@ struct SetEditorSheet: View {
                     .foregroundStyle(Color.textSecondary)
             } else {
                 ForEach(Array(draft.wrappedValue.minis.enumerated()), id: \.element.id) { index, mini in
-                    let name = drop ? "do drop \(index + 1)" : "da mini-série \(index + 1)"
+                    let selected = part == mini.id
+                    let name = drop ? "Drop \(index + 1)" : "Mini-série \(index + 1)"
                     HStack(spacing: Spacing.xs) {
-                        Text("\(row.serie.isEmpty ? "•" : row.serie).\(index + 1)")
-                            .font(AppFont.number(13))
-                            .foregroundStyle(tint)
-                            .frame(width: 34)
-                        MiniField(text: miniBinding(draft, mini.id, \.load), keyboard: .decimalPad, suffix: unit,
-                                  label: "Carga \(name)")
-                        Text("×").foregroundStyle(Color.textMuted)
-                        MiniField(text: miniBinding(draft, mini.id, \.reps), keyboard: .numberPad, suffix: "reps",
-                                  label: "Reps \(name)")
                         Button {
+                            select(mini.id)
+                        } label: {
+                            HStack(spacing: Spacing.sm) {
+                                Text(ChainParts.label(serie: row.serie, part: index))
+                                    .font(AppFont.number(13))
+                                    .foregroundStyle(tint)
+                                    .frame(width: 34, alignment: .leading)
+                                Text("\(mini.load.isEmpty ? "—" : mini.load) \(unit) × \(mini.reps.isEmpty ? "—" : mini.reps)")
+                                    .font(AppFont.number(17, weight: .semibold))
+                                    .monospacedDigit()
+                                    .foregroundStyle(Color.textPrimary)
+                                Spacer(minLength: Spacing.xs)
+                                Text(selected ? "Editando" : "Editar")
+                                    .font(AppFont.caption)
+                                    .foregroundStyle(selected ? Color.textSecondary : Color.linearBlue)
+                            }
+                            .padding(.horizontal, Spacing.xs)
+                            .frame(minHeight: 44)
+                            .background(selected ? Color.linearBlueContainer : Color.appSurfaceLow,
+                                        in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("\(name): \(mini.load) \(unit), \(mini.reps) reps")
+                        .accessibilityHint("Abre nos controles de carga e reps do topo")
+
+                        Button {
+                            if part == mini.id { part = nil }
                             draft.wrappedValue.minis.removeAll { $0.id == mini.id }
                         } label: {
                             Image(systemName: "xmark")
@@ -195,7 +225,8 @@ struct SetEditorSheet: View {
                     }
                 }
                 Button {
-                    addMini(draft)
+                    addMini(draft, select: true)
+                    select(draft.wrappedValue.minis.last?.id ?? UUID())
                 } label: {
                     Label(drop ? "Adicionar drop" : "Adicionar mini-série", systemImage: "plus")
                 }
@@ -223,8 +254,8 @@ struct SetEditorSheet: View {
                 }
                 .padding(.top, Spacing.xxs)
                 Text(drop
-                     ? "Salvar grava a série e os drops de uma vez, com essa pausa depois de cada um. Depois do último, o descanso é o do relógio."
-                     : "Salvar grava a série e as mini-séries de uma vez, com essa pausa depois de cada uma. Depois da última, o descanso é o do relógio.")
+                     ? "Toque num drop para editar carga e reps no topo. Salvar grava a série e os drops de uma vez, com essa pausa depois de cada um; depois do último, o descanso é o do relógio."
+                     : "Toque numa mini-série para editar carga e reps no topo. Salvar grava a série e as mini-séries de uma vez, com essa pausa depois de cada uma; depois da última, o descanso é o do relógio.")
                     .font(AppFont.caption)
                     .foregroundStyle(Color.textMuted)
             }
@@ -232,7 +263,7 @@ struct SetEditorSheet: View {
     }
 
     /// A new part: a drop takes about 20 % off the load, a rest-pause part repeats it (see `ChainParts.nextPart`).
-    private func addMini(_ draft: Binding<SetDraft>) {
+    private func addMini(_ draft: Binding<SetDraft>, select: Bool = false) {
         let d = draft.wrappedValue
         let next = ChainParts.nextPart(
             kind: d.kind,
@@ -242,18 +273,9 @@ struct SetEditorSheet: View {
             unit: d.unit
         )
         if d.pause.isEmpty { draft.wrappedValue.pause = model.chainPause(kind: d.kind, for: d.row) }
-        draft.wrappedValue.minis.append(MiniSet(load: Fmt.loadInput(next.load), reps: String(next.reps)))
-    }
-
-    private func miniBinding(_ draft: Binding<SetDraft>, _ id: UUID, _ field: WritableKeyPath<MiniSet, String>) -> Binding<String> {
-        Binding(
-            get: { draft.wrappedValue.minis.first { $0.id == id }?[keyPath: field] ?? "" },
-            set: { value in
-                if let i = draft.wrappedValue.minis.firstIndex(where: { $0.id == id }) {
-                    draft.wrappedValue.minis[i][keyPath: field] = value
-                }
-            }
-        )
+        let mini = MiniSet(load: Fmt.loadInput(next.load), reps: String(next.reps))
+        draft.wrappedValue.minis.append(mini)
+        if select { part = mini.id }
     }
 
     private func bumpPause(_ draft: Binding<SetDraft>, _ delta: Int) {
@@ -274,31 +296,5 @@ struct SetEditorSheet: View {
             next = model.ledger.restTarget(exercise: draft.wrappedValue.row.exercise, routine: model.routine, day: model.day)
         }
         draft.wrappedValue.rest = Fmt.duration(Double(next))
-    }
-}
-
-/// Small numeric field used by the rest-pause parts.
-private struct MiniField: View {
-    @Binding var text: String
-    let keyboard: UIKeyboardType
-    let suffix: String
-    let label: String
-
-    var body: some View {
-        HStack(spacing: 4) {
-            TextField("—", text: $text)
-                .keyboardType(keyboard)
-                .multilineTextAlignment(.trailing)
-                .font(AppFont.number(17))
-                .monospacedDigit()
-                .foregroundStyle(Color.textPrimary)
-                .accessibilityLabel(label)
-            Text(suffix)
-                .font(AppFont.caption)
-                .foregroundStyle(Color.textMuted)
-        }
-        .padding(.horizontal, Spacing.xs)
-        .frame(maxWidth: .infinity, minHeight: 44)
-        .background(Color.appSurfaceLow, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
     }
 }

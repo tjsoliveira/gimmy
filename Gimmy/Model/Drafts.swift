@@ -106,6 +106,23 @@ enum ChainParts {
         return max(0, (target / step).rounded(.down) * step)
     }
 
+    /// "3" for the set itself, "3.1" for its first part (`part` counts from 0).
+    static func label(serie: String, part: Int?) -> String {
+        let base = serie.isEmpty ? "•" : serie
+        return part.map { "\(base).\($0 + 1)" } ?? base
+    }
+
+    /// "47,5×8" as typed, with a dash for what is still empty.
+    static func summary(load: String, reps: String) -> String {
+        let l = load.trimmingCharacters(in: .whitespaces), r = reps.trimmingCharacters(in: .whitespaces)
+        return "\(l.isEmpty ? "—" : l)×\(r.isEmpty ? "—" : r)"
+    }
+
+    /// Reps chips under the steppers: rest-pause parts are short, so they get low counts.
+    static func repsChips(kind: String, editingPart: Bool) -> [Int] {
+        editingPart && kind == SetKind.restPause ? [2, 3, 4, 5, 6] : [6, 8, 10, 12, 15]
+    }
+
     /// What a new part starts with. Rest-pause: the same load, a third of the reps for the first part.
     /// Drop: about 20 % off the load, the same reps.
     static func nextPart(kind: String, load: Double?, reps: Int, first: Bool, unit: WeightUnit) -> (load: Double?, reps: Int) {

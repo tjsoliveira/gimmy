@@ -91,6 +91,18 @@ final class DraftsTests: XCTestCase {
                      "no load typed yet: the drop's load stays empty")
     }
 
+    func testPartLabelsSummariesAndRepsChips() {
+        XCTAssertEqual(ChainParts.label(serie: "3", part: nil), "3")
+        XCTAssertEqual(ChainParts.label(serie: "3", part: 0), "3.1")
+        XCTAssertEqual(ChainParts.label(serie: "", part: 1), "•.2")
+        XCTAssertEqual(ChainParts.summary(load: "47,5", reps: "8"), "47,5×8")
+        XCTAssertEqual(ChainParts.summary(load: " ", reps: ""), "—×—")
+        XCTAssertEqual(ChainParts.repsChips(kind: SetKind.restPause, editingPart: true), [2, 3, 4, 5, 6])
+        XCTAssertEqual(ChainParts.repsChips(kind: SetKind.restPause, editingPart: false), [6, 8, 10, 12, 15],
+                       "the set itself keeps the usual chips")
+        XCTAssertEqual(ChainParts.repsChips(kind: SetKind.drop, editingPart: true), [6, 8, 10, 12, 15])
+    }
+
     func testDropWrittenInOneSaveNumbersAsOneSeries() {
         let parts = ChainParts.parts([(40, 8), (30, 6)], kind: SetKind.drop)
         let rows = [registroRow("10/11/2026", "Costas", "Row", load: 50, reps: 10),
