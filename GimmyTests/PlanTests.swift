@@ -66,14 +66,63 @@ final class PlanTests: XCTestCase {
     }
 
     func testRoutineRules() {
-        let others = [costasOld, costasNew]
-        XCTAssertNotNil(RoutineRules.validate(name: "  ", start: "2026-12-01", end: nil, others: []))
-        XCTAssertNotNil(RoutineRules.validate(name: "Peito", start: "2026-12-01", end: "2026-11-01", others: []))
-        XCTAssertNotNil(RoutineRules.validate(name: "costas", start: "2027-01-01", end: nil, others: others),
-                        "same name, case aside, overlapping the current Costas")
-        XCTAssertNil(RoutineRules.validate(name: "Peito", start: "2026-12-01", end: nil, others: others))
-        XCTAssertNil(RoutineRules.validate(name: "Costas", start: "2026-10-01", end: "2026-10-31",
-                                           others: [costasNew, RoutineVersion(name: "Costas", start: "2026-11-01", end: "2026-11-30", rows: [])]))
+        XCTAssertNotNil(RoutineRules.validate(name: "  ", start: "2026-12-01", end: nil))
+        XCTAssertNotNil(RoutineRules.validate(name: "Peito", start: "2026-12-01", end: "2026-11-01"))
+        XCTAssertNil(RoutineRules.validate(name: "Peito", start: "2026-12-01", end: nil))
+        XCTAssertEqual(RoutineRules.group(" Braços  B "), "bracos b")
+        XCTAssertEqual(RoutineRules.group("COSTAS"), RoutineRules.group("costas"))
+    }
+
+    private typealias Fix = RoutineRules.Fix
+
+    func testANewRoutineEndsTheOneOfItsGroupTheDayBefore() {
+        let legacy = RoutineVersion(name: "Costas", start: nil, end: nil, rows: [2])
+        let new = RoutineVersion(name: "costas ", start: "2026-12-01", end: nil, rows: [])
+        XCTAssertEqual(RoutineRules.resolve([legacy, new], pinned: new.id),
+                       .ok([Fix(version: legacy.id, name: "Costas", start: nil, end: "2026-11-30")]),
+                       "same group despite case and spaces")
+    }
+
+    func testRoutinesThatDontOverlapNeedNothing() {
+        XCTAssertEqual(RoutineRules.resolve([costasOld, costasNew], pinned: costasNew.id), .ok([]))
+        let peito = RoutineVersion(name: "Peito", start: nil, end: nil, rows: [5])
+        XCTAssertEqual(RoutineRules.resolve([costasOld, peito], pinned: peito.id), .ok([]), "other groups never clash")
+    }
+
+    func testTheRoutineBeingSavedIsNeverShortened() {
+        let earlier = RoutineVersion(name: "Ombro", start: "2026-11-01", end: nil, rows: [9])
+        let later = RoutineVersion(name: "Ombro", start: "2026-12-01", end: nil, rows: [12])
+        guard case .blocked = RoutineRules.resolve([earlier, later], pinned: earlier.id) else {
+            return XCTFail("saving the one that starts first would have to cut it short")
+        }
+        XCTAssertEqual(RoutineRules.resolve([earlier, later], pinned: later.id),
+                       .ok([Fix(version: earlier.id, name: "Ombro", start: "2026-11-01", end: "2026-11-30")]))
+    }
+
+    func testRoutinesOfAGroupStartingTheSameDayBlock() {
+        let a = RoutineVersion(name: "Braços", start: "2026-12-01", end: nil, rows: [3])
+        let b = RoutineVersion(name: "bracos", start: "2026-12-01", end: nil, rows: [])
+        guard case .blocked = RoutineRules.resolve([a, b], pinned: b.id) else { return XCTFail("same start") }
+        let c = RoutineVersion(name: "Pernas", start: nil, end: nil, rows: [4])
+        let d = RoutineVersion(name: "PERNAS", start: nil, end: nil, rows: [])
+        guard case .blocked = RoutineRules.resolve([c, d], pinned: d.id) else { return XCTFail("no start on either") }
+    }
+
+    func testConflictsMadeOutsideTheAppAreSettledToo() {
+        let old = RoutineVersion(name: "Peito", start: nil, end: nil, rows: [7])
+        let new = RoutineVersion(name: "Peito", start: "2026-11-20", end: nil, rows: [12])
+        let saved = RoutineVersion(name: "Costas", start: "2026-12-01", end: nil, rows: [])
+        XCTAssertEqual(RoutineRules.resolve([old, new, saved], pinned: saved.id),
+                       .ok([Fix(version: old.id, name: "Peito", start: nil, end: "2026-11-19")]))
+    }
+
+    func testOnlyTheOverlapsAreCut() {
+        let a = RoutineVersion(name: "Costas", start: nil, end: nil, rows: [2])
+        let b = RoutineVersion(name: "Costas", start: "2026-11-01", end: "2026-11-15", rows: [8])
+        let c = RoutineVersion(name: "Costas", start: "2026-12-01", end: nil, rows: [])
+        XCTAssertEqual(RoutineRules.resolve([a, b, c], pinned: c.id),
+                       .ok([Fix(version: a.id, name: "Costas", start: nil, end: "2026-10-31")]),
+                       "once a ends before b, it no longer reaches c; b ends before c already")
     }
 
     func testValidityText() {

@@ -120,17 +120,62 @@ struct RoutineVersion: Identifiable, Hashable {
 }
 
 enum RoutineRules {
-    /// An error to show, or nil when a routine can be saved with this name and dates.
-    static func validate(name raw: String, start: String?, end: String?, others: [RoutineVersion]) -> String? {
+    /// An error to show, or nil when a routine can have this name and dates. Overlaps are settled by `resolve`.
+    static func validate(name raw: String, start: String?, end: String?) -> String? {
         let name = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if name.isEmpty { return "Dê um nome ao treino." }
         if let start, let end, end < start { return "A data de fim vem antes da de início." }
-        if let clash = others.first(where: {
-            $0.name.caseInsensitiveCompare(name) == .orderedSame && $0.overlaps(start: start, end: end)
-        }) {
-            return "As datas se sobrepõem às do outro \(clash.name) (\(Fmt.validity(clash.start, clash.end).lowercased())). Ajuste a vigência de um dos dois."
-        }
         return nil
+    }
+
+    /// The muscle group a routine stands for: its name, ignoring accents, case and spaces ("Braços" = "bracos").
+    static func group(_ name: String) -> String {
+        name.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "pt_BR"))
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
+    }
+
+    /// A routine that has to end earlier so it stops overlapping the next one of its group.
+    struct Fix: Equatable {
+        var version: String
+        var name: String
+        var start: String?
+        var end: String
+    }
+
+    enum Resolution: Equatable {
+        case ok([Fix])
+        case blocked(String)
+    }
+
+    /// Keeps one routine per muscle group in force on any day, across all routines (including ones edited outside
+    /// the app). When two of a group overlap, the one that started first ends the day before the other starts.
+    /// The routine being saved (`pinned`) is never shortened, and two of a group that start the same day (or both
+    /// with no start) can't be put in order: either case stops the save with a message.
+    static func resolve(_ versions: [RoutineVersion], pinned: String?) -> Resolution {
+        var fixes: [Fix] = []
+        for (_, list) in Dictionary(grouping: versions, by: { group($0.name) }) {
+            var sorted = list.sorted { ($0.start ?? "") < ($1.start ?? "") }
+            for j in sorted.indices {
+                let later = sorted[j]
+                for i in 0..<j {
+                    let earlier = sorted[i]
+                    guard earlier.overlaps(start: later.start, end: later.end) else { continue }
+                    guard let start = later.start, (earlier.start ?? "") < start else {
+                        let when = later.start.map { "começam no mesmo dia (\(Fmt.fullDay($0)))" } ?? "não têm data de início"
+                        return .blocked("\(earlier.name) e \(later.name) são do mesmo grupo e \(when). Mude o início de um deles.")
+                    }
+                    if earlier.id == pinned {
+                        return .blocked("Já existe \(later.name) \(Fmt.validity(later.start, later.end).lowercased()), e as datas se sobrepõem. Termine este antes de \(Fmt.fullDay(start)) ou ajuste o outro.")
+                    }
+                    let end = DayKey.offset(start, by: -1)
+                    sorted[i].end = end
+                    fixes.removeAll { $0.version == earlier.id }
+                    fixes.append(Fix(version: earlier.id, name: earlier.name, start: earlier.start, end: end))
+                }
+            }
+        }
+        return .ok(fixes.sorted { ($0.name, $0.start ?? "") < ($1.name, $1.start ?? "") })
     }
 }
 

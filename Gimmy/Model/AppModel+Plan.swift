@@ -49,6 +49,30 @@ extension AppModel {
 
     private func lines(of v: RoutineVersion) -> [PlanItem] { ledger.plan.filter { v.rows.contains($0.row) } }
 
+    /// Writes that end earlier routines of the same group where they overlap (see `RoutineRules.resolve`) and a
+    /// line saying so, or the reason the save has to stop. `after` is every routine as it will be once saved.
+    private func integrity(_ after: [RoutineVersion], pinned: String) -> (writes: [SheetWrite], note: String?, problem: String?) {
+        switch RoutineRules.resolve(after, pinned: pinned) {
+        case .blocked(let message):
+            return ([], nil, message)
+        case .ok(let fixes):
+            var writes: [SheetWrite] = []
+            for fix in fixes {
+                for r in ledger.version(id: fix.version)?.rows ?? [] {
+                    writes.append(("Rotinas!L\(r)", [[Self.dateCell(fix.end)]]))
+                }
+            }
+            let note = fixes.isEmpty ? nil : fixes
+                .map { "\($0.name) (\(Fmt.validity($0.start, nil).lowercased())) agora termina em \(Fmt.fullDay($0.end))" }
+                .joined(separator: "; ")
+            return (writes, note, nil)
+        }
+    }
+
+    private static func withNote(_ message: String, _ note: String?) -> String {
+        note.map { "\(message) \($0)." } ?? message
+    }
+
     private func afterPlanChange() {
         pickRoutine()
         ensureSelection()
@@ -59,13 +83,18 @@ extension AppModel {
     /// Returns an error to show, or nil once created (the new routine opens).
     func createRoutine(name raw: String, start: String, end: String?) async -> String? {
         let name = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let problem = RoutineRules.validate(name: name, start: start, end: end, others: ledger.versions) { return problem }
+        if let problem = RoutineRules.validate(name: name, start: start, end: end) { return problem }
+        let new = RoutineVersion(name: name, start: start, end: end, rows: [])
+        if let problem = integrity(ledger.versions + [new], pinned: new.id).problem { return problem }
         var problem: String?
+        var note: String?
         let error = await perform("Criando treino…", write: true) {
             let (_, headers) = try await self.refreshPlan(expecting: [])
-            if let p = RoutineRules.validate(name: name, start: start, end: end, others: self.ledger.versions) { problem = p; return }
+            let check = self.integrity(self.ledger.versions + [new], pinned: new.id)
+            if let p = check.problem { problem = p; return }
+            note = check.note
             let r = self.ledger.planRowCount + 1
-            var writes = self.headerWrites(headers)
+            var writes = self.headerWrites(headers) + check.writes
             writes.append(("Rotinas!A\(r):C\(r)", [[OutCell.literal(name), .blank, .blank]]))
             writes.append(("Rotinas!K\(r):L\(r)", [[Self.dateCell(start), Self.dateCell(end)]]))
             try await self.sheets.update(writes)
@@ -75,25 +104,28 @@ extension AppModel {
         if let problem { return problem }
         afterPlanChange()
         setupPath = [.routine(RoutineVersion.id(name, start))]
-        show("\(name) criado. Agora adicione os exercícios.")
+        show(Self.withNote("\(name) criado. Agora adicione os exercícios.", note))
         return nil
     }
 
     /// Saves a routine's name and dates on all its lines. Returns an error to show, or nil once saved.
     func updateRoutine(_ v: RoutineVersion, name raw: String, start: String?, end: String?) async -> String? {
         let name = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        let others = ledger.versions.filter { $0.id != v.id }
-        if let problem = RoutineRules.validate(name: name, start: start, end: end, others: others) { return problem }
+        if let problem = RoutineRules.validate(name: name, start: start, end: end) { return problem }
         if name != v.name && !ledger.sessionDays(of: v).isEmpty {
             return "O nome não pode mudar: já há treinos registrados como \(v.name)."
         }
+        let edited = RoutineVersion(name: name, start: start, end: end, rows: v.rows)
+        if let problem = integrity(ledger.versions.filter { $0.id != v.id } + [edited], pinned: edited.id).problem { return problem }
         var problem: String?
+        var note: String?
         let error = await perform("Salvando treino…", write: true) {
             let (ok, headers) = try await self.refreshPlan(expecting: self.lines(of: v))
             guard ok else { problem = Self.conflictMessage; return }
-            let others = self.ledger.versions.filter { $0.id != v.id }
-            if let p = RoutineRules.validate(name: name, start: start, end: end, others: others) { problem = p; return }
-            var writes = self.headerWrites(headers)
+            let check = self.integrity(self.ledger.versions.filter { $0.id != v.id } + [edited], pinned: edited.id)
+            if let p = check.problem { problem = p; return }
+            note = check.note
+            var writes = self.headerWrites(headers) + check.writes
             for r in v.rows {
                 if name != v.name { writes.append(("Rotinas!A\(r)", [[OutCell.literal(name)]])) }
                 writes.append(("Rotinas!K\(r):L\(r)", [[Self.dateCell(start), Self.dateCell(end)]]))
@@ -116,7 +148,7 @@ extension AppModel {
             defaults.set(name, forKey: "treino")
         }
         afterPlanChange()
-        show("\(name) salvo · \(Fmt.validity(start, end).lowercased()).")
+        show(Self.withNote("\(name) salvo · \(Fmt.validity(start, end).lowercased()).", note))
         return nil
     }
 
@@ -152,26 +184,37 @@ extension AppModel {
         }
         let items = NewRoutine.items(session: session.rows, plan: planned)
         let start = DayKey.offset(session.day, by: 1)
-        if let error = await replaceRoutine(current, with: items, endingOn: session.day, startingOn: start) {
-            show(error, error: true)
-            return
+        switch await replaceRoutine(current, with: items, endingOn: session.day, startingOn: start) {
+        case .failure(let error):
+            show(error.message, error: true)
+        case .success(let note):
+            show(Self.withNote("Rotina nova de \(current.name) a partir de \(Fmt.fullDay(start)). A anterior ficou em Encerrados.", note))
         }
-        show("Rotina nova de \(current.name) a partir de \(Fmt.fullDay(start)). A anterior ficou em Encerrados.")
     }
 
+    private struct PlanProblem: Error { let message: String }
+
+    /// Ends `current` on `end` and adds a version of it from `start` with these exercises.
+    /// Succeeds with a line about other routines the integrity check had to end.
     private func replaceRoutine(_ current: RoutineVersion, with items: [NewRoutine.Item],
-                                endingOn end: String, startingOn start: String) async -> String? {
-        guard !items.isEmpty else { return "O treino não tem exercícios para montar uma rotina." }
+                                endingOn end: String, startingOn start: String) async -> Result<String?, PlanProblem> {
+        guard !items.isEmpty else { return .failure(PlanProblem(message: "O treino não tem exercícios para montar uma rotina.")) }
         var problem: String?
+        var note: String?
         let error = await perform("Montando a rotina nova…", write: true) {
             let (ok, headers) = try await self.refreshPlan(expecting: self.lines(of: current))
-            guard ok, let fresh = self.ledger.version(id: current.id) else { problem = Self.conflictMessage; return }
-            let others = self.ledger.versions.filter { $0.id != fresh.id }
-            if let p = RoutineRules.validate(name: fresh.name, start: start, end: nil, others: others) { problem = p; return }
+            guard ok, var fresh = self.ledger.version(id: current.id) else { problem = Self.conflictMessage; return }
+            let rows = fresh.rows
+            fresh.end = end
+            let new = RoutineVersion(name: fresh.name, start: start, end: nil, rows: [])
+            let check = self.integrity(self.ledger.versions.filter { $0.id != fresh.id } + [fresh, new], pinned: new.id)
+            if let p = check.problem { problem = p; return }
+            note = check.note
             var writes = self.headerWrites(headers)
-            for r in fresh.rows {
+            for r in rows {
                 writes.append(("Rotinas!L\(r)", [[Self.dateCell(end)]]))
             }
+            writes += check.writes
             let first = self.ledger.planRowCount + 1
             for (i, item) in items.enumerated() {
                 let r = first + i
@@ -185,10 +228,10 @@ extension AppModel {
             try await self.sheets.update(writes)
             try await self.loadPlan()
         }
-        if let error { return error }
-        if let problem { return problem }
+        if let error { return .failure(PlanProblem(message: error)) }
+        if let problem { return .failure(PlanProblem(message: problem)) }
         afterPlanChange()
-        return nil
+        return .success(note)
     }
 
     // MARK: Exercises

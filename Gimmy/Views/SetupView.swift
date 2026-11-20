@@ -109,6 +109,13 @@ private struct NewRoutineSheet: View {
     @State private var end = Date()
     @State private var error: String?
 
+    private var datesFooter: String {
+        let dates = hasEnd
+            ? "Depois do fim, o treino sai do seletor da tela Treino."
+            : "Sem data de fim, é um treino atual: aparece no seletor da tela Treino a partir do início."
+        return dates + " Se já houver um treino de mesmo nome valendo nessas datas, ele termina na véspera do início deste."
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -125,9 +132,7 @@ private struct NewRoutineSheet: View {
                 } header: {
                     Text("Vigência")
                 } footer: {
-                    Text(hasEnd
-                         ? "Depois do fim, o treino sai do seletor da tela Treino."
-                         : "Sem data de fim, é um treino atual: aparece no seletor da tela Treino a partir do início.")
+                    Text(datesFooter)
                 }
                 if let error {
                     Section {
