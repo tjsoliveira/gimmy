@@ -49,6 +49,21 @@ final class SeriesOrderTests: XCTestCase {
         XCTAssertEqual(after.map(\.load), [50, 40, 20, 30])
     }
 
+    func testTheConfigurationFollowsTheWorkout() {
+        let plan = [PlanSet(kind: SetKind.warmup, reps: 15), PlanSet(kind: "", reps: 12), PlanSet(kind: "", reps: 10),
+                    PlanSet(kind: SetKind.drop, reps: 8), PlanSet(kind: SetKind.failure, reps: 10)]
+        XCTAssertEqual(SeriesOrder.blocks(kinds: plan.map(\.kind)), [[0], [1], [2], [3, 4]])
+        XCTAssertEqual(SeriesOrder.planFollow(plan: (plan, .configured), workoutSeries: 4, from: 3, to: 1),
+                       .reorder([plan[0], plan[3], plan[4], plan[1], plan[2]]),
+                       "the drop series moves with its part; the others keep their order")
+        XCTAssertEqual(SeriesOrder.planFollow(plan: (plan, .configured), workoutSeries: 5, from: 3, to: 1), .differs,
+                       "a series was added in the workout: the configuration stays")
+        XCTAssertEqual(SeriesOrder.planFollow(plan: (plan, .lastSession("2026-11-13")), workoutSeries: 4, from: 3, to: 1),
+                       .followsLastWorkout)
+        XCTAssertEqual(SeriesOrder.planFollow(plan: (plan, .sheet), workoutSeries: 4, from: 0, to: 1), .followsLastWorkout)
+        XCTAssertEqual(SeriesOrder.planFollow(plan: nil, workoutSeries: 4, from: 0, to: 1), .notInRoutine)
+    }
+
     func testRowCheckAndContentCopy() {
         let x = SetRow(row: 5, kind: SetKind.drop, load: 42.5, reps: 8, day: "2026-11-20", routine: "Costas", exercise: "Row")
         var cells = [Cell](repeating: .empty, count: 13)

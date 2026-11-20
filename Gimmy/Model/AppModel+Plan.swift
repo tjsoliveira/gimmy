@@ -213,6 +213,22 @@ extension AppModel {
         return error ?? problem
     }
 
+    /// Rewrites an exercise's planned sets in a new order (reps in G, types in J; the number of series doesn't change).
+    /// Runs inside another `perform`. False when its Rotinas line changed since the app read it.
+    func writePlannedOrder(_ item: PlanItem, _ sets: [PlanSet]) async throws -> Bool {
+        let (ok, headers) = try await refreshPlan(expecting: [item])
+        guard ok, let fresh = ledger.plan.first(where: { $0.row == item.row }),
+              PlanSets.configured(kinds: fresh.kinds, reps: fresh.reps) == PlanSets.configured(kinds: item.kinds, reps: item.reps)
+        else { return false }
+        let cols = PlanSets.columns(sets)
+        var writes = headerWrites(headers)
+        writes.append(("Rotinas!G\(item.row)", [[OutCell.literal(cols.reps)]]))
+        writes.append(("Rotinas!J\(item.row)", [[OutCell.text(cols.kinds)]]))
+        try await sheets.update(writes)
+        try await loadPlan()
+        return true
+    }
+
     /// Saves an exercise's sets, notes, planned rest and unit. Returns an error to show, or nil once saved.
     func savePlanItem(_ item: PlanItem, sets: [PlanSet], notes rawNotes: String, rest restText: String, unit: WeightUnit) async -> String? {
         guard !sets.isEmpty else { return "Deixe pelo menos uma série." }

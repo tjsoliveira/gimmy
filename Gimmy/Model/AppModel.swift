@@ -491,7 +491,7 @@ final class AppModel {
     }
 
     /// Moves the series holding row `fromRow` to the place of the series holding `toRow`, in the same exercise.
-    /// The other series keep their order; see `SeriesOrder`.
+    /// The other series keep their order, and the routine's configuration follows; see `SeriesOrder`.
     func moveSeries(in group: ExerciseGroup, fromRow: Int, toRow: Int) async {
         guard entry == nil else { return }
         let rows = group.rows
@@ -502,8 +502,13 @@ final class AppModel {
             show("Não dá para mover: uma série que termina em drop ou rest-pause sem a parte seguinte precisa ficar por último.", error: true)
             return
         }
+        let day = rows.first?.day ?? self.day
+        let item = rows.first.flatMap { ledger.planItem(exercise: group.exercise, routine: $0.routine, day: day) }
+        let follow = SeriesOrder.planFollow(plan: item.map { ledger.plannedSets($0, before: day) },
+                                            workoutSeries: SeriesOrder.blocks(rows).count, from: from, to: to)
         var conflict = false
         var moves: [Int: Int] = [:]
+        var planWritten = false
         let error = await perform("Reordenando…", write: true) {
             let fresh = try await self.sheets.values("Registro!D\(first):P\(last)")
             func line(_ i: Int) -> [Cell] { i < fresh.count ? fresh[i] : [] }
@@ -531,6 +536,10 @@ final class AppModel {
                 self.saveRest()
             }
             try await self.loadRegistro()
+            // The workout is saved; the configuration following it is a second step that may fail on its own.
+            if case .reorder(let sets) = follow, let item {
+                planWritten = (try? await self.writePlannedOrder(item, sets)) ?? false
+            }
         }
         if conflict {
             show("A planilha mudou desde que você abriu o app. Confira e arraste de novo.", error: true)
@@ -538,7 +547,19 @@ final class AppModel {
         }
         if let error { show(error, error: true); return }
         UISelectionFeedbackGenerator().selectionChanged()
-        show("Série movida.")
+        switch follow {
+        case .reorder:
+            show(planWritten
+                 ? "Série movida. A configuração de \(group.exercise) também mudou: o próximo treino sai nessa ordem."
+                 : "Série movida no treino de hoje, mas não consegui mudar a configuração de \(group.exercise). Ajuste a ordem em Configurar.",
+                 error: !planWritten)
+        case .followsLastWorkout:
+            show("Série movida. O próximo treino copia este, então sai nessa ordem.")
+        case .notInRoutine:
+            show("Série movida. \(group.exercise) não está na configuração do treino, então a ordem vale só para hoje.")
+        case .differs:
+            show("Série movida só no treino de hoje: ele tem séries diferentes da configuração de \(group.exercise). Para as próximas semanas, mude a ordem em Configurar.")
+        }
     }
 
     private func ledgerPartsLabel(_ count: Int, drop: Bool) -> String {
