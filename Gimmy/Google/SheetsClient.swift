@@ -18,7 +18,7 @@ enum Cell: Decodable, Equatable, Sendable {
 }
 
 /// A value written with valueInputOption=USER_ENTERED. An empty text clears the cell; `skip` leaves it as is.
-enum OutCell: Encodable, Sendable {
+enum OutCell: Encodable, Equatable, Sendable {
     case text(String)
     case number(Double)
     case skip

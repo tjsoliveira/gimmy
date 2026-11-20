@@ -4,7 +4,7 @@ App de iPhone (SwiftUI) para registrar treinos. A planilha Google "Controle de T
 
 ## Regras
 
-- **Testes contra regressão são obrigatórios.** Toda mudança em funcionalidade essencial vem com testes unitários em `GimmyTests/` (XCTest), novos ou atualizados. Essencial = leitura da planilha (`Parse`, `DayKey`, `RestInput`), regras de treino (`Ledger`: numeração com drop/rest-pause, 1RM, status, recordes, volume kg/lb, montagem do treino, sessões e estatísticas), rascunhos e rest-pause (`Drafts.swift`), treinos configurados e vigência (`Plan.swift`: séries planejadas, versões por data, cópia do treino) e foco da tela de treino (`Focus.swift`).
+- **Testes contra regressão são obrigatórios.** Toda mudança em funcionalidade essencial vem com testes unitários em `GimmyTests/` (XCTest), novos ou atualizados. Essencial = leitura da planilha (`Parse`, `DayKey`, `RestInput`), regras de treino (`Ledger`: numeração com drop/rest-pause, 1RM, status, recordes, volume kg/lb, montagem do treino, sessões e estatísticas), rascunhos e rest-pause (`Drafts.swift`), treinos configurados e vigência (`Plan.swift`: séries planejadas, versões por data, cópia do treino) foco da tela de treino (`Focus.swift`) e reordenação de séries (`SeriesOrder.swift`).
 - Mantenha a lógica testável fora das views e do `AppModel` (que fala com a rede): funções puras no `Model/`, chamadas pelo `AppModel`.
 - O CI (`.github/workflows/build.yml`) roda os testes antes de gerar o IPA; o IPA só sai se eles passarem. Não há compilador Swift no ambiente de nuvem: confira o resultado no GitHub Actions depois do push.
 - Não adicione funcionalidades que não foram pedidas.

@@ -58,6 +58,18 @@ struct DraftStore {
         })
     }
 
+    /// Sets moved to other rows (`old: new`), as when the series of an exercise are reordered:
+    /// their drafts move with them.
+    mutating func remap(_ moves: [Int: Int]) {
+        var next = drafts.filter { moves[$0.key] == nil }
+        for (old, new) in moves {
+            guard var d = drafts[old] else { continue }
+            d.row.row = new
+            next[new] = d
+        }
+        drafts = next
+    }
+
     /// Row `row` was deleted: its draft goes, everything below moves up by one.
     mutating func removeAndShift(_ row: Int) {
         drafts[row] = nil

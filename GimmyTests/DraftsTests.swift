@@ -19,6 +19,19 @@ final class DraftsTests: XCTestCase {
         XCTAssertTrue(edited.differs(from: base))
     }
 
+    func testDraftsFollowSetsMovedToOtherRows() {
+        var store = DraftStore()
+        store.stash(draft(for: row(3), load: "30"))
+        store.stash(draft(for: row(4), load: "40"))
+        store.stash(draft(for: row(6), load: "60"))
+        store.remap([3: 4, 4: 5, 5: 3])
+        XCTAssertEqual(store.draft(for: row(4))?.load, "30")
+        XCTAssertEqual(store.draft(for: row(4))?.row.row, 4)
+        XCTAssertEqual(store.draft(for: row(5))?.load, "40")
+        XCTAssertNil(store.draft(for: row(3)), "the set now on row 3 had no draft")
+        XCTAssertEqual(store.draft(for: row(6))?.load, "60", "sets that didn't move keep theirs")
+    }
+
     func testUnsavedDraftIsKeptPerSet() {
         var store = DraftStore()
         store.stash(draft(for: row(5), load: "40"))

@@ -490,6 +490,57 @@ final class AppModel {
         return nil
     }
 
+    /// Moves the series holding row `fromRow` to the place of the series holding `toRow`, in the same exercise.
+    /// The other series keep their order; see `SeriesOrder`.
+    func moveSeries(in group: ExerciseGroup, fromRow: Int, toRow: Int) async {
+        guard entry == nil else { return }
+        let rows = group.rows
+        guard let from = SeriesOrder.block(of: fromRow, in: rows), let to = SeriesOrder.block(of: toRow, in: rows),
+              from != to else { return }
+        guard let order = SeriesOrder.move(rows, series: from, to: to),
+              let first = rows.first?.row, let last = rows.last?.row else {
+            show("Não dá para mover: uma série que termina em drop ou rest-pause sem a parte seguinte precisa ficar por último.", error: true)
+            return
+        }
+        var conflict = false
+        var moves: [Int: Int] = [:]
+        let error = await perform("Reordenando…", write: true) {
+            let fresh = try await self.sheets.values("Registro!D\(first):P\(last)")
+            func line(_ i: Int) -> [Cell] { i < fresh.count ? fresh[i] : [] }
+            guard rows.count == last - first + 1,
+                  rows.enumerated().allSatisfy({ i, x in RegistroRow.matches(line(i), x) }) else {
+                try await self.loadRegistro()
+                conflict = true
+                return
+            }
+            var dToG: [[OutCell]] = []
+            var rest: [[OutCell]] = []
+            for (position, source) in order.enumerated() {
+                let content = RegistroRow.content(line(source))
+                dToG.append(content.dToG)
+                rest.append([content.rest])
+                if source != position { moves[rows[source].row] = rows[position].row }
+            }
+            try await self.sheets.update([
+                ("Registro!D\(first):G\(last)", dToG),
+                ("Registro!P\(first):P\(last)", rest),
+            ])
+            self.drafts.remap(moves)
+            if let state = self.rest, let moved = moves[state.row] {
+                self.rest?.row = moved
+                self.saveRest()
+            }
+            try await self.loadRegistro()
+        }
+        if conflict {
+            show("A planilha mudou desde que você abriu o app. Confira e arraste de novo.", error: true)
+            return
+        }
+        if let error { show(error, error: true); return }
+        UISelectionFeedbackGenerator().selectionChanged()
+        show("Série movida.")
+    }
+
     private func ledgerPartsLabel(_ count: Int, drop: Bool) -> String {
         if count == 0 { return "Série salva" }
         if drop { return "Série e \(count) \(count == 1 ? "drop salvos" : "drops salvos")" }
@@ -865,12 +916,7 @@ final class AppModel {
     /// Confirms the row still holds what we think it holds before writing to it.
     private func verify(_ x: SetRow) async throws -> Bool {
         let v = try await sheets.values("Registro!D\(x.row):O\(x.row)").first ?? []
-        return Parse.text(v.at(0)) == x.kind
-            && Parse.number(v.at(1)) == x.load
-            && Parse.number(v.at(2)).map({ Int($0.rounded()) }) == x.reps
-            && Parse.day(v.at(9)) == x.day
-            && Parse.text(v.at(10)) == x.routine
-            && Parse.text(v.at(11)) == x.exercise
+        return RegistroRow.matches(v, x)
     }
 
     /// Runs one sheet operation at a time. Returns a message on failure.

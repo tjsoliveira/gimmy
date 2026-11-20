@@ -338,10 +338,15 @@ private struct ExerciseCard: View {
     let group: ExerciseGroup
     let onEditRest: (SetRow) -> Void
     let onRemove: (SetRow) -> Void
+    /// The row a dragged series is over.
+    @State private var dropTarget: Int?
 
     var body: some View {
         let ledger = model.ledger
         let sets = group.rows.map { WorkoutSet(row: $0, ledger: ledger, preset: model.preset(for: $0)) }
+        // First row of each series: only these can be dragged.
+        let heads = SeriesOrder.blocks(group.rows).compactMap { block in block.first.map { group.rows[$0].row } }
+        let canMove = model.busy == nil && model.entry == nil
 
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 6) {
@@ -385,12 +390,39 @@ private struct ExerciseCard: View {
 
             VStack(spacing: 0) {
                 ForEach(Array(sets.enumerated()), id: \.element.id) { index, set in
-                    SetRowView(set: set, isSelected: model.entry?.row.row == set.row.row || model.highlightedRow == set.row.row) {
+                    let row = set.row.row
+                    let head = heads.firstIndex(of: row)
+                    SetRowView(set: set, isSelected: model.entry?.row.row == row || model.highlightedRow == row || dropTarget == row) {
                         model.select(set.row)
                     }
-                    .id(set.row.row)
+                    .id(row)
                     .contextMenu {
                         SetActions(row: set.row, onEditRest: onEditRest, onRemove: onRemove)
+                    }
+                    // Hold and drag a series (with its drops or rest-pause parts) onto another to take its place.
+                    .modifier(SeriesDragSource(row: row, title: "Série \(set.orderLabel)", enabled: head != nil && canMove))
+                    .dropDestination(for: String.self) { items, _ in
+                        dropTarget = nil
+                        guard canMove, let source = items.first.flatMap(SeriesOrder.row(fromPayload:)),
+                              group.rows.contains(where: { $0.row == source }) else { return false }
+                        Task { await model.moveSeries(in: group, fromRow: source, toRow: row) }
+                        return true
+                    } isTargeted: { over in
+                        if over { dropTarget = row } else if dropTarget == row { dropTarget = nil }
+                    }
+                    .accessibilityActions {
+                        if let head, canMove {
+                            if head > 0 {
+                                Button("Subir série") {
+                                    Task { await model.moveSeries(in: group, fromRow: row, toRow: heads[head - 1]) }
+                                }
+                            }
+                            if head < heads.count - 1 {
+                                Button("Descer série") {
+                                    Task { await model.moveSeries(in: group, fromRow: row, toRow: heads[head + 1]) }
+                                }
+                            }
+                        }
                     }
                     if index < sets.count - 1 {
                         Divider().overlay(Color.appBorder.opacity(0.4))
@@ -423,6 +455,29 @@ private struct ExerciseCard: View {
         }
         let sets = ledger.sets(exercise: group.exercise, day: previous).filter { !$0.isWarmup }
         return "Última: \(Fmt.shortDay(previous)) · " + sets.map { Fmt.set($0.load, $0.reps) }.joined(separator: "  ·  ")
+    }
+}
+
+/// Lets a series be held and dragged; the preview names it.
+private struct SeriesDragSource: ViewModifier {
+    let row: Int
+    let title: String
+    let enabled: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if enabled {
+            content.draggable(SeriesOrder.dragPayload(row: row)) {
+                Label(title, systemImage: "line.3.horizontal")
+                    .font(AppFont.bodyBold)
+                    .foregroundStyle(Color.textPrimary)
+                    .padding(.horizontal, Spacing.sm)
+                    .padding(.vertical, Spacing.xs)
+                    .background(Color.appSurfaceHighest, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+            }
+        } else {
+            content
+        }
     }
 }
 
