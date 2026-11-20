@@ -60,6 +60,15 @@ struct RootView: View {
             }
         }
         .animation(.smooth(duration: 0.25), value: model.banner)
+        .alert("Montar uma rotina nova?", isPresented: Binding(
+            get: { model.newRoutineOffer != nil },
+            set: { if !$0 { model.newRoutineOffer = nil } }
+        ), presenting: model.newRoutineOffer) { offer in
+            Button("Montar rotina nova") { Task { await model.acceptNewRoutine(offer) } }
+            Button("Agora não", role: .cancel) {}
+        } message: { offer in
+            Text("Você mudou séries neste treino de \(offer.routine). A configuração atual encerra hoje e uma nova, igual a este treino, vale a partir de amanhã.")
+        }
     }
 }
 

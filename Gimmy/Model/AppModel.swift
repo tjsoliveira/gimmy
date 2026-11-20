@@ -45,6 +45,8 @@ final class AppModel {
     var allCollapsed = false
     var addingExercise = false
     var finishing = false
+    /// A finished workout that differs from its routine: the app asks to make a new routine from it.
+    var newRoutineOffer: NewRoutineOffer?
     var rest: RestState?
     var highlightedRow: Int?
 
@@ -787,6 +789,7 @@ final class AppModel {
         guard let minutes = Int(raw.trimmingCharacters(in: .whitespaces)), minutes > 0, minutes < 600 else {
             return "Informe a duração do treino em minutos."
         }
+        let offer = routineOffer(for: z)
         var conflict = false
         let error = await perform("Finalizando…", write: true) {
             guard try await self.verify(first) else {
@@ -809,8 +812,19 @@ final class AppModel {
         tab = .history
         historyPath = [z.key]
         show("Treino finalizado · \(Fmt.minutes(minutes)).")
+        newRoutineOffer = offer
         Task { await resync() }
         return nil
+    }
+
+    /// Today's workout changed from its routine (and no newer version of it is already set): offer a new routine.
+    private func routineOffer(for z: Session) -> NewRoutineOffer? {
+        let today = DayKey.from(Date())
+        guard z.day == today, let current = ledger.version(named: z.routine, on: z.day),
+              !ledger.versions.contains(where: { $0.name == z.routine && ($0.start ?? "") > today }),
+              NewRoutine.changed(session: z.rows, template: ledger.template(routine: z.routine, day: z.day))
+        else { return nil }
+        return NewRoutineOffer(session: z.key, routine: z.routine, version: current.id)
     }
 
     // MARK: - Rest timer

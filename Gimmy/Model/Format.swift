@@ -17,6 +17,12 @@ enum DayKey {
         return Calendar.current.date(from: DateComponents(year: p[0], month: p[1], day: p[2]))
     }
 
+    /// The day `days` after (or before) `key`.
+    static func offset(_ key: String, by days: Int) -> String {
+        guard let date = date(key), let moved = Calendar.current.date(byAdding: .day, value: days, to: date) else { return key }
+        return from(moved)
+    }
+
     private static let utc: Calendar = {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "UTC") ?? .current

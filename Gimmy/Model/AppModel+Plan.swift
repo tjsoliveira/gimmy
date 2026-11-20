@@ -8,6 +8,13 @@ enum PlanRoute: Hashable {
 
 typealias SheetWrite = (range: String, rows: [[OutCell]])
 
+/// A finished workout the app offers to turn into a new routine.
+struct NewRoutineOffer: Equatable {
+    var session: String
+    var routine: String
+    var version: String
+}
+
 /// Routine setup: the Rotinas tab, one line per exercise of a routine version.
 /// Columns D and E hold the sheet's formulas and are never written.
 extension AppModel {
@@ -127,6 +134,60 @@ extension AppModel {
         setupPath = []
         afterPlanChange()
         show("\(v.name) apagado. Os treinos já registrados continuam no histórico.")
+        return nil
+    }
+
+    /// Makes a new routine from a finished workout: the routine in force ends on the workout's day, and a new
+    /// version with the same name, the workout's exercises and sets, starts the day after.
+    func acceptNewRoutine(_ offer: NewRoutineOffer) async {
+        newRoutineOffer = nil
+        guard let session = ledger.session(offer.session), let current = ledger.version(id: offer.version) else {
+            show("Não achei o treino para montar a rotina. Recarregue e monte pela aba Configurar.", error: true)
+            return
+        }
+        var planned: [String: NewRoutine.Planned] = [:]
+        for item in ledger.items(of: current) where planned[item.exercise] == nil {
+            planned[item.exercise] = NewRoutine.Planned(sets: ledger.plannedSets(item, before: session.day).sets,
+                                                        notes: item.notes, rest: item.rest)
+        }
+        let items = NewRoutine.items(session: session.rows, plan: planned)
+        let start = DayKey.offset(session.day, by: 1)
+        if let error = await replaceRoutine(current, with: items, endingOn: session.day, startingOn: start) {
+            show(error, error: true)
+            return
+        }
+        show("Rotina nova de \(current.name) a partir de \(Fmt.fullDay(start)). A anterior ficou em Encerrados.")
+    }
+
+    private func replaceRoutine(_ current: RoutineVersion, with items: [NewRoutine.Item],
+                                endingOn end: String, startingOn start: String) async -> String? {
+        guard !items.isEmpty else { return "O treino não tem exercícios para montar uma rotina." }
+        var problem: String?
+        let error = await perform("Montando a rotina nova…", write: true) {
+            let (ok, headers) = try await self.refreshPlan(expecting: self.lines(of: current))
+            guard ok, let fresh = self.ledger.version(id: current.id) else { problem = Self.conflictMessage; return }
+            let others = self.ledger.versions.filter { $0.id != fresh.id }
+            if let p = RoutineRules.validate(name: fresh.name, start: start, end: nil, others: others) { problem = p; return }
+            var writes = self.headerWrites(headers)
+            for r in fresh.rows {
+                writes.append(("Rotinas!L\(r)", [[Self.dateCell(end)]]))
+            }
+            let first = self.ledger.planRowCount + 1
+            for (i, item) in items.enumerated() {
+                let r = first + i
+                let cols = PlanSets.columns(item.sets)
+                writes.append(("Rotinas!A\(r):C\(r)", [[OutCell.literal(fresh.name), .number(Double(i + 1)), OutCell.literal(item.exercise)]]))
+                writes.append(("Rotinas!F\(r):L\(r)", [[
+                    .number(Double(cols.series)), OutCell.literal(cols.reps), OutCell.literal(item.notes),
+                    item.rest.map { OutCell.number($0) } ?? .blank, .text(cols.kinds), Self.dateCell(start), .blank,
+                ]]))
+            }
+            try await self.sheets.update(writes)
+            try await self.loadPlan()
+        }
+        if let error { return error }
+        if let problem { return problem }
+        afterPlanChange()
         return nil
     }
 
