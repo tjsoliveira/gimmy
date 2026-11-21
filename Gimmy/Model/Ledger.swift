@@ -1,12 +1,15 @@
 import Foundation
 
 /// How an exercise's load is measured, from the Unidade column of the Exercícios tab ("kg", "lb" or "placas").
-/// Placas counts the plates of a machine's stack: it has no weight in kg.
+/// Placas counts the plates of a machine's stack, for machines that don't say what a plate weighs.
 enum WeightUnit: String, CaseIterable, Codable, Sendable {
     case kg, lb
     case plates = "placas"
 
     static let poundInKg = 0.45359237
+    /// What a stack plate is taken to weigh for the volume: a common 10 lb plate. The machines that need plates
+    /// don't say, so it is an estimate.
+    static let estimatedPlateKg = 4.5
 
     /// Reads the Unidade column; anything unknown is kg.
     static func parse(_ raw: String) -> WeightUnit {
@@ -26,12 +29,12 @@ enum WeightUnit: String, CaseIterable, Codable, Sendable {
         }
     }
 
-    /// Kilograms per unit of load. Plates have no weight in kg, so they stay out of the volume.
+    /// Kilograms per unit of load, for the volume. For plates, an estimate (`estimatedPlateKg`).
     var kgFactor: Double {
         switch self {
         case .kg: return 1
         case .lb: return Self.poundInKg
-        case .plates: return 0
+        case .plates: return Self.estimatedPlateKg
         }
     }
 

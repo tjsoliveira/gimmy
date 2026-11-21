@@ -81,7 +81,7 @@ final class DraftsTests: XCTestCase {
         XCTAssertEqual(WeightUnit.plates.defaultStep(for: nil), 1)
         XCTAssertEqual(WeightUnit.plates.cardAdds, [1, 2, 3, 4, 5])
         XCTAssertEqual(WeightUnit.allCases.map(\.toggleTitle), ["KG", "LBS", "PLACAS"])
-        XCTAssertEqual(WeightUnit.allCases.map(\.kgFactor), [1, WeightUnit.poundInKg, 0])
+        XCTAssertEqual(WeightUnit.allCases.map(\.kgFactor), [1, WeightUnit.poundInKg, 4.5])
     }
 
     func testDropPartsEndTheChain() {

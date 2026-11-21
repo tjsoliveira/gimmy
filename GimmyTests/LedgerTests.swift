@@ -100,7 +100,7 @@ final class LedgerTests: XCTestCase {
         XCTAssertEqual(l.volume(routine: "Braços", day: "2026-11-03"), 1000 * WeightUnit.poundInKg + 400, accuracy: 0.001)
     }
 
-    func testPlatesAreReadAndStayOutOfTheVolume() {
+    func testPlatesAreReadAndCountInTheVolumeAtAnEstimate() {
         XCTAssertEqual(WeightUnit.parse("placas"), .plates)
         XCTAssertEqual(WeightUnit.parse(" Placa "), .plates)
         XCTAssertEqual(WeightUnit.parse("LB"), .lb)
@@ -115,7 +115,8 @@ final class LedgerTests: XCTestCase {
             exercises: [[.text("Leg Press"), .empty, .empty, .text("kg")], [.text("Calf (stack)"), .empty, .empty, .text("placas")]]
         )
         XCTAssertEqual(l.unit(of: "Calf (stack)"), .plates)
-        XCTAssertEqual(l.volume(routine: "Pernas", day: "2026-11-21"), 1000, "plates have no weight in kg")
+        XCTAssertEqual(l.volume(routine: "Pernas", day: "2026-11-21"), 1000 + 7 * 15 * 4.5, accuracy: 0.001,
+                       "each plate counts as about 4.5 kg")
         XCTAssertEqual(l.best(l.sets(exercise: "Calf (stack)", day: "2026-11-21")) ?? 0, 10.5, accuracy: 0.001,
                        "the 1RM is still estimated, in plates (Epley above 10 reps: 7 × 1.5)")
     }

@@ -9,4 +9,4 @@ App de iPhone (SwiftUI) para registrar treinos. A planilha Google "Controle de T
 - O CI (`.github/workflows/build.yml`) roda os testes antes de gerar o IPA; o IPA só sai se eles passarem. Não há compilador Swift no ambiente de nuvem: confira o resultado no GitHub Actions depois do push.
 - Não adicione funcionalidades que não foram pedidas.
 - Visual: siga o DESIGN.md (Kinetic Dark Minimal) e os tokens de `Gimmy/App/Theme.swift`.
-- A planilha não muda de formato sem combinar antes: o app usa as colunas que já existem, mais J (Tipos), K (Início) e L (Fim) na aba Rotinas. As colunas D e E da Rotinas são fórmulas e nunca são gravadas. A Unidade (D) da aba Exercícios aceita kg, lb ou placas; placas ficam fora do volume em kg, no app e nas fórmulas da planilha.
+- A planilha não muda de formato sem combinar antes: o app usa as colunas que já existem, mais J (Tipos), K (Início) e L (Fim) na aba Rotinas. As colunas D e E da Rotinas são fórmulas e nunca são gravadas. A Unidade (D) da aba Exercícios aceita kg, lb ou placas; no volume em kg, cada placa vale 4,5 kg (estimativa), no app e nas fórmulas da planilha.
