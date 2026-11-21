@@ -314,7 +314,7 @@ struct UnitToggle: View {
                 Button {
                     selection = unit
                 } label: {
-                    Text(unit == .kg ? "KG" : "LBS")
+                    Text(unit.toggleTitle)
                         .font(.system(size: 11, weight: on ? .bold : .semibold))
                         .foregroundStyle(on ? Color.textPrimary : Color.textMuted)
                         .padding(.horizontal, 10)

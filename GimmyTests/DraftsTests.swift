@@ -76,6 +76,14 @@ final class DraftsTests: XCTestCase {
         XCTAssertEqual(ChainParts.suggestedReps(after: 1), 1)
     }
 
+    func testPlateControls() {
+        XCTAssertEqual(WeightUnit.plates.defaultStep(for: 7), 1)
+        XCTAssertEqual(WeightUnit.plates.defaultStep(for: nil), 1)
+        XCTAssertEqual(WeightUnit.plates.cardAdds, [1, 2, 3, 4, 5])
+        XCTAssertEqual(WeightUnit.allCases.map(\.toggleTitle), ["KG", "LBS", "PLACAS"])
+        XCTAssertEqual(WeightUnit.allCases.map(\.kgFactor), [1, WeightUnit.poundInKg, 0])
+    }
+
     func testDropPartsEndTheChain() {
         let parts = ChainParts.parts([(30, 8), (22.5, 8)], kind: SetKind.drop)
         XCTAssertEqual(parts.map(\.kind), [SetKind.drop, ""], "the drops continue the series, the last one closes it")
@@ -90,6 +98,8 @@ final class DraftsTests: XCTestCase {
         XCTAssertEqual(ChainParts.dropLoad(after: 10, unit: .kg), 8, "light loads step by 1 kg")
         XCTAssertEqual(ChainParts.dropLoad(after: 45, unit: .lb), 35)
         XCTAssertEqual(ChainParts.dropLoad(after: 0, unit: .kg), 0)
+        XCTAssertEqual(ChainParts.dropLoad(after: 10, unit: .plates), 8, "whole plates")
+        XCTAssertEqual(ChainParts.dropLoad(after: 3, unit: .plates), 2)
     }
 
     func testNewPartStartsFromTheOneBefore() {

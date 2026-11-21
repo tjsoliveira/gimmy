@@ -41,7 +41,7 @@ O app usa as abas que já existem. Na aba Rotinas ele acrescenta três colunas n
 |---|---|---|
 | Registro | A–Q | A–F ao montar treino ou adicionar séries/exercícios (insere linhas), D–F ao salvar série, P (descanso), Q (duração) |
 | Rotinas | A–L | pela aba Configurar: A–C, F–L (D e E têm fórmulas e nunca são gravadas); insere e apaga linhas |
-| Exercícios | A–D | D (unidade kg/lb), ou uma linha nova para exercício novo |
+| Exercícios | A–D | D (unidade: kg, lb ou placas), ou uma linha nova para exercício novo |
 
 Na aba Rotinas, cada linha é um exercício de um treino:
 

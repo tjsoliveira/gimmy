@@ -100,6 +100,26 @@ final class LedgerTests: XCTestCase {
         XCTAssertEqual(l.volume(routine: "Braços", day: "2026-11-03"), 1000 * WeightUnit.poundInKg + 400, accuracy: 0.001)
     }
 
+    func testPlatesAreReadAndStayOutOfTheVolume() {
+        XCTAssertEqual(WeightUnit.parse("placas"), .plates)
+        XCTAssertEqual(WeightUnit.parse(" Placa "), .plates)
+        XCTAssertEqual(WeightUnit.parse("LB"), .lb)
+        XCTAssertEqual(WeightUnit.parse(""), .kg)
+        XCTAssertEqual(WeightUnit.plates.rawValue, "placas", "what the Unidade column stores")
+
+        let l = makeLedger(
+            registro: [
+                registroRow("21/11/2026", "Pernas", "Leg Press", load: 100, reps: 10),
+                registroRow("21/11/2026", "Pernas", "Calf (stack)", load: 7, reps: 15),
+            ],
+            exercises: [[.text("Leg Press"), .empty, .empty, .text("kg")], [.text("Calf (stack)"), .empty, .empty, .text("placas")]]
+        )
+        XCTAssertEqual(l.unit(of: "Calf (stack)"), .plates)
+        XCTAssertEqual(l.volume(routine: "Pernas", day: "2026-11-21"), 1000, "plates have no weight in kg")
+        XCTAssertEqual(l.best(l.sets(exercise: "Calf (stack)", day: "2026-11-21")) ?? 0, 9.3, accuracy: 0.001,
+                       "the 1RM is still estimated, in plates")
+    }
+
     func testTemplateFromPlanWhenRoutineWasNeverDone() {
         let l = makeLedger(registro: [], plan: [
             planRow("Costas", order: 2, "B", sets: 2, reps: "12"),

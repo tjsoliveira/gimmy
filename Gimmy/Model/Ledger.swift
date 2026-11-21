@@ -1,17 +1,54 @@
 import Foundation
 
+/// How an exercise's load is measured, from the Unidade column of the Exercícios tab ("kg", "lb" or "placas").
+/// Placas counts the plates of a machine's stack: it has no weight in kg.
 enum WeightUnit: String, CaseIterable, Codable, Sendable {
     case kg, lb
+    case plates = "placas"
 
     static let poundInKg = 0.45359237
 
+    /// Reads the Unidade column; anything unknown is kg.
+    static func parse(_ raw: String) -> WeightUnit {
+        switch raw.trimmingCharacters(in: .whitespaces).lowercased() {
+        case "lb", "lbs": return .lb
+        case "placa", "placas": return .plates
+        default: return .kg
+        }
+    }
+
+    /// Short label for the unit toggle.
+    var toggleTitle: String {
+        switch self {
+        case .kg: return "KG"
+        case .lb: return "LBS"
+        case .plates: return "PLACAS"
+        }
+    }
+
+    /// Kilograms per unit of load. Plates have no weight in kg, so they stay out of the volume.
+    var kgFactor: Double {
+        switch self {
+        case .kg: return 1
+        case .lb: return Self.poundInKg
+        case .plates: return 0
+        }
+    }
+
     /// Quick-add chips under the load in the entry card: each tap adds its value.
-    var cardAdds: [Double] { self == .lb ? [2.5, 5, 10, 20, 45] : [1, 2.5, 5, 10, 20] }
+    var cardAdds: [Double] {
+        switch self {
+        case .kg: return [1, 2.5, 5, 10, 20]
+        case .lb: return [2.5, 5, 10, 20, 45]
+        case .plates: return [1, 2, 3, 4, 5]
+        }
+    }
 
     func defaultStep(for load: Double?) -> Double {
         switch self {
         case .lb: return (load.map { $0 < 25 } ?? false) ? 2.5 : 5
         case .kg: return (load.map { $0 < 12 } ?? false) ? 1 : 2.5
+        case .plates: return 1
         }
     }
 }
@@ -205,7 +242,7 @@ struct Ledger {
             if name.isEmpty { continue }
             exercises.append(name)
             exerciseSheetRow[name] = i + 2
-            units[name] = Parse.text(r.at(3)).lowercased() == "lb" ? .lb : .kg
+            units[name] = WeightUnit.parse(Parse.text(r.at(3)))
         }
     }
 
@@ -246,7 +283,7 @@ struct Ledger {
     // MARK: Lookups
 
     func unit(of exercise: String) -> WeightUnit { units[exercise] ?? .kg }
-    func kgFactor(_ exercise: String) -> Double { unit(of: exercise) == .lb ? WeightUnit.poundInKg : 1 }
+    func kgFactor(_ exercise: String) -> Double { unit(of: exercise).kgFactor }
     func row(_ number: Int) -> SetRow? { rows.first { $0.row == number } }
 
     /// Planned rest for an exercise: from the routine version in force on `day` when given, else any line of it.
