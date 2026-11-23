@@ -39,6 +39,9 @@ jobs:
     needs: test
     if: github.event_name != 'pull_request'
     runs-on: macos-15
+    # Publishing the release needs write access to the repository.
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -69,6 +72,8 @@ jobs:
             -sdk iphoneos \
             -destination 'generic/platform=iOS' \
             -derivedDataPath build \
+            MARKETING_VERSION="1.0.${{ github.run_number }}" \
+            CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
 
       - name: Package IPA
@@ -82,3 +87,29 @@ jobs:
           name: Gimmy-ipa
           path: Gimmy.ipa
           retention-days: 30
+
+      # SideStore installs and updates Gimmy from this release: it reads
+      # https://github.com/<repo>/releases/latest/download/source.json, which points at this build's IPA.
+      - name: Publish release for SideStore
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PLIST=build/Build/Products/Release-iphoneos/Gimmy.app/Info.plist
+          BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$PLIST")
+          VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$PLIST")
+          BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$PLIST")
+          TAG="v$VERSION"
+          python3 .github/scripts/altsource.py \
+            --repo "$GITHUB_REPOSITORY" \
+            --bundle-id "$BUNDLE_ID" \
+            --version "$VERSION" \
+            --build "$BUILD" \
+            --date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --download-url "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/Gimmy.ipa" \
+            --size "$(stat -f%z Gimmy.ipa)" \
+            --sha256 "$(shasum -a 256 Gimmy.ipa | cut -d' ' -f1)" \
+            --notes "$(git log -1 --pretty=%s)" > source.json
+          gh release create "$TAG" Gimmy.ipa source.json \
+            --title "Gimmy $VERSION" \
+            --notes "$(git log -1 --pretty=%s)" \
+            --latest
