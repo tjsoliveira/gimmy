@@ -11,7 +11,7 @@ struct RootView: View {
                 ContentUnavailableView {
                     Label("Falta configurar", systemImage: "wrench.and.screwdriver")
                 } description: {
-                    Text("Preencha o Config/Secrets.xcconfig com o ID do cliente Google e o ID da planilha, e instale o app de novo. O passo a passo está no README.")
+                    Text("Preencha o Config/Secrets.xcconfig com o ID do cliente Google e o ID da planilha, e gere o app de novo.")
                 }
             case .signedOut:
                 SignInView()

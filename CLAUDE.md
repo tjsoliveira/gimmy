@@ -1,6 +1,6 @@
 # Gimmy — instruções para o Claude
 
-App de iPhone (SwiftUI) para registrar treinos. A planilha Google "Controle de Treinos" é a base de dados (abas Registro, Rotinas, Exercícios), lida e gravada pela API do Sheets. Veja o README para setup e o DESIGN.md para o visual.
+App de iPhone (SwiftUI) para registrar treinos. A planilha Google "Controle de Treinos" é a base de dados (abas Registro, Rotinas, Exercícios), lida e gravada pela API do Sheets. Veja o DESIGN.md para o visual. É um app pessoal: o README não tem (e não deve ter) instruções de instalação. Os IDs (Bundle ID, cliente Google, planilha) ficam em `Config/Secrets.xcconfig`, fora do git (modelo em `Config/Secrets.example.xcconfig`), e nos secrets do GitHub usados pelo CI.
 
 ## Regras
 

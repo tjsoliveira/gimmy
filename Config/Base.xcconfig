@@ -1,4 +1,4 @@
-// Defaults. Your own values go in Config/Secrets.xcconfig (not committed). See README.
+// Defaults. Your own values go in Config/Secrets.xcconfig (not committed). See Config/Secrets.example.xcconfig.
 APP_BUNDLE_ID = com.example.gimmy
 DEVELOPMENT_TEAM =
 GOOGLE_CLIENT_ID_PREFIX =

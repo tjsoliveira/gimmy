@@ -1,6 +1,6 @@
 import Foundation
 
-/// Values injected at build time from Config/Secrets.xcconfig (see README).
+/// Values injected at build time from Config/Secrets.xcconfig (see Config/Secrets.example.xcconfig).
 struct AppConfig {
     let clientIDPrefix: String
     let spreadsheetID: String
