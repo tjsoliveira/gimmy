@@ -1,7 +1,7 @@
 # DESIGN.md — Kinetic Dark Minimal
 
-Design system do Gimmy: alta densidade, modo escuro, inspirado no Linear e em ferramentas de precisão.
-Os tokens abaixo estão implementados em `Gimmy/App/Theme.swift`.
+Gimmy's design system: high density, dark mode, inspired by Linear and precision tools.
+The tokens below are implemented in `Gimmy/App/Theme.swift`.
 
 ```yaml
 name: Kinetic Dark Minimal
@@ -43,25 +43,25 @@ colors:
   on-primary: "#FFFFFF"
 
   # Semantic Workout Set Types
-  set-warmup: "#F59E0B"     # Âmbar / Aquecimento
-  set-normal: "#71717A"     # Cinza Neutro / Série padrão
-  set-dropset: "#A855F7"    # Roxo Elétrico / Drop-set
-  set-restpause: "#14B8A6"  # Verde-azulado / Rest-pause (adicionado no app; não estava no design original)
-  set-failure: "#EF4444"    # Vermelho Coral / Falha muscular
+  set-warmup: "#F59E0B"     # Amber / Warm-up
+  set-normal: "#71717A"     # Neutral gray / Regular set
+  set-dropset: "#A855F7"    # Electric purple / Drop set
+  set-restpause: "#14B8A6"  # Teal / Rest-pause (added in the app; not in the original design)
+  set-failure: "#EF4444"    # Coral red / Muscle failure
 
   # Status & Indicators
-  status-success: "#22C55E" # Verde / Concluído e Streaks
-  status-warning: "#F59E0B" # Âmbar
-  status-danger: "#EF4444"  # Vermelho
+  status-success: "#22C55E" # Green / Done and streaks
+  status-warning: "#F59E0B" # Amber
+  status-danger: "#EF4444"  # Red
 
 radii:
   none: "0px"
   xs: "4px"
-  sm: "6px"       # Badges pequenos, atalhos de incremento (chips)
-  md: "8px"       # Botões secundários, inputs, pílulas
-  lg: "12px"      # Botões de ação principais, cards internos
-  card: "16px"    # Cards principais de exercício e modais
-  full: "9999px"  # Pílulas, tags de status e avatares
+  sm: "6px"       # Small badges, increment shortcuts (chips)
+  md: "8px"       # Secondary buttons, inputs, pills
+  lg: "12px"      # Main action buttons, inner cards
+  card: "16px"    # Main exercise cards and modals
+  full: "9999px"  # Pills, status tags and avatars
 
 spacing:
   2xs: "4px"
@@ -116,19 +116,22 @@ components:
     font_weight: "700"
 ```
 
-## Notas de implementação
 
-- **Fonte:** o app usa SF Pro (fonte do sistema) no lugar da Inter, como nos componentes de referência; números em SF Pro Rounded.
-- **Tela de treino:** foco no exercício atual. O exercício com séries pendentes fica aberto; tocar numa série abre o painel de edição (Entrada Rápida + opções da série); os demais aparecem como cards compactos (círculo vazio para os que não começaram, meio círculo para os em andamento, check para os concluídos). Tocar num card compacto abre o exercício; os exercícios podem ser feitos em qualquer ordem. Quando todas as séries do treino estão registradas, todos os exercícios ficam fechados com o check, inclusive o último. O exercício aberto tem um botão com seta para cima, no canto do título, que o recolhe: aí todos ficam fechados até você tocar em um.
-- **Reordenar séries:** segurar uma série e arrastar sobre outra põe a arrastada no lugar dela; as demais mantêm a ordem. A série vai junto com os drops ou mini-séries dela (só a série principal pode ser arrastada), e o alvo fica destacado em índigo. Segurar sem arrastar continua abrindo o menu da série. As linhas da planilha não mudam de lugar: muda o conteúdo (tipo, carga, reps, notas e descanso). Uma série que termina em drop ou rest-pause sem a parte seguinte precisa ficar por último. A configuração do exercício (aba Rotinas) acompanha a nova ordem quando o treino tem o mesmo número de séries que ela, para a próxima cópia sair igual; exercício sem séries configuradas já copia o último treino. No VoiceOver, as ações "Subir série" e "Descer série" fazem o mesmo.
-- **Placas:** além de kg e lb, um exercício pode ser medido em placas (o número de placas da pilha da máquina). O seletor do painel vira KG | LBS | PLACAS e, em placas, o − e o + andam de 1 em 1 e os atalhos são +1 a +5. No volume em kg, cada placa vale 4,5 kg (estimativa: essas máquinas não dizem o peso); 1RM, comparação com a última vez e recordes continuam, em placas.
-- **Integridade das rotinas:** só uma rotina por grupo muscular vale em cada dia. O grupo é o nome da rotina, sem considerar acentos, maiúsculas e espaços (Braços = bracos). Sempre que uma rotina é salva (criar, mudar vigência, rotina nova a partir do treino), o app confere todas, inclusive as editadas fora do app: quando duas do mesmo grupo se sobrepõem, a que começou antes passa a terminar na véspera da outra, e o aviso diz o que mudou. Não salva, e explica, se a rotina sendo salva teria que ser encurtada ou se as duas começam no mesmo dia (ou nenhuma tem início).
-- **Rotina nova a partir do treino:** ao finalizar o treino de hoje, se ele mudou em relação ao que o Começar treino copia (tipo de série, séries ou exercícios adicionados, removidos ou em outra ordem; carga e reps feitas não contam), o app pergunta "Montar uma rotina nova?". Aceitando, a configuração atual encerra hoje e uma nova versão com o mesmo nome, igual ao treino, vale a partir de amanhã. Séries que já existiam na mesma posição (3, 3.1) mantêm a meta de reps; as novas usam as reps de hoje. Notas e descanso alvo vêm da configuração atual.
-- **Opções da série:** tipo, repetir a última, descanso, limpar e remover ficam no painel de edição, abaixo da Entrada Rápida, e também no toque longo em cada série.
-- **Séries:** concluídas ficam com fundo `surface-container-high`, badge preenchido na cor do tipo e check verde; séries com valores preenchidos e não salvos aparecem como "pré-definida" em índigo.
-- **Tempo de treino:** cronômetro no topo da tela de treino enquanto o treino de hoje está aberto; some quando o treino é finalizado. O botão Pausar para a contagem (o tempo fica parado em cinza, com "Pausado") e Continuar volta a contar sem incluir o tempo parado. Registrar uma série com o cronômetro pausado volta a contar.
-- **Drop e rest-pause:** no painel, escolher Drop ou Rest-pause abre as partes da série (drops ou mini-séries) e um campo de pausa (− valor +, de 5 em 5 s). No topo da Entrada Rápida, uma fileira de botões (`3 · 3.1 · 3.2 · +`, cada um com carga×reps) escolhe o que os steppers grandes e os atalhos editam: a série ou uma das partes, selecionada em índigo. Embaixo, as partes aparecem como resumo grande; tocar abre a parte no topo. Nas mini-séries do rest-pause, os atalhos de reps são baixos (2 a 6). Um drop novo vem com cerca de 20% a menos de carga, arredondado no passo da unidade, e as mesmas reps; uma mini-série nova repete a carga. Salvar grava a série e as partes de uma vez, com a pausa em todas menos na última. A pausa inicial é a da última vez que o exercício teve aquele tipo; sem histórico, 10 s no drop e 15 s no rest-pause.
-- **Painel de série:** carga e reps em largura total (teclas de 56 pt, números de 40 pt), tipo, drops ou mini-séries do rest-pause, repetir a última e descanso; a barra de descanso continua visível no painel.
-- **Configurar:** lista de treinos agrupada em Vigentes, Programados e Encerrados. No treino: nome e vigência (início e fim opcionais) e os exercícios, que se reordenam em Reordenar e saem com o gesto de deslizar. No exercício: uma linha por série com o badge do tipo, o menu de tipo e − reps +, mais descanso alvo, unidade e notas. Com alterações não salvas, o botão de voltar vira Descartar e o Salvar aparece fixo embaixo.
-- **Histórico:** o treino de hoje ainda não finalizado mostra "em andamento" em índigo no lugar da variação de volume, que só aparece depois de Finalizar.
-- **Notas do exercício:** aparecem na tela de treino, logo abaixo da última vez, com um ícone de informação.
+## Implementation notes
+
+The app's UI is in Portuguese; labels on screen are quoted as they appear, with a translation where it helps.
+
+- **Font:** the app uses SF Pro (the system font) instead of Inter, as in the reference components; numbers use SF Pro Rounded.
+- **Workout screen:** focus on the current exercise. The exercise with sets still to log stays open; tapping a set opens the edit panel (Quick Entry + set options); the others show as compact cards (empty circle for not started, half circle for in progress, check for done). Tapping a compact card opens that exercise; exercises can be done in any order. When every set of the workout is logged, all exercises close with the check, the last one included. The open exercise has an up-arrow button at the corner of its title that collapses it: then all stay closed until you tap one.
+- **Reordering sets:** touching and holding a set and dragging it over another puts the dragged one in its place; the others keep their order. A set moves together with its drops or mini-sets (only the main set can be dragged), and the target is highlighted in indigo. Holding without dragging still opens the set's menu. The spreadsheet rows don't move: their content does (type, load, reps, notes and rest). A set ending in a drop or rest-pause with no following part has to stay last. The exercise's setup (Rotinas tab) follows the new order when the workout has the same number of sets as the setup, so the next copy comes out the same; an exercise with no configured sets already copies the last workout. In VoiceOver, the "Subir série" (move set up) and "Descer série" (move set down) actions do the same.
+- **Plates:** besides kg and lb, an exercise can be measured in plates (the number of plates on the machine's stack). The panel's picker becomes KG | LBS | PLACAS and, in plates, − and + step by 1 and the shortcuts are +1 to +5. In kg volume, each plate counts as 4.5 kg (an estimate: these machines don't show the weight); 1RM, the comparison with last time and records keep working, in plates.
+- **Routine integrity:** only one routine per muscle group is in effect on any day. The group is the routine's name, ignoring accents, case and spaces (Braços = bracos). Whenever a routine is saved (created, validity changed, new routine from the workout), the app checks all of them, including ones edited outside the app: when two of the same group overlap, the one that started earlier now ends the day before the other, and the notice says what changed. It doesn't save, and explains why, if the routine being saved would have to be shortened or if both start on the same day (or neither has a start).
+- **New routine from the workout:** when finishing today's workout, if it changed from what "Começar treino" (start workout) copies (set type, sets or exercises added, removed or reordered; the load and reps done don't count), the app asks "Montar uma rotina nova?" (build a new routine?). On yes, the current setup ends today and a new version with the same name, matching the workout, takes effect from tomorrow. Sets that already existed in the same position (3, 3.1) keep their rep target; new ones use today's reps. Notes and target rest come from the current setup.
+- **Set options:** type, repeat the last one, rest, clear and remove sit in the edit panel, below Quick Entry, and also in the long press on each set.
+- **Sets:** done sets get a `surface-container-high` background, a badge filled with the type's color and a green check; sets with values filled in but not saved show as "pré-definida" (preset) in indigo.
+- **Workout time:** a timer at the top of the workout screen while today's workout is open; it goes away when the workout is finished. The "Pausar" (pause) button stops the count (the time stays still in gray, with "Pausado") and "Continuar" (resume) counts again without the paused time. Logging a set while the timer is paused resumes it.
+- **Drop and rest-pause:** in the panel, choosing Drop or Rest-pause opens the set's parts (drops or mini-sets) and a pause field (− value +, in 5 s steps). At the top of Quick Entry, a row of buttons (`3 · 3.1 · 3.2 · +`, each with load×reps) picks what the large steppers and shortcuts edit: the set or one of its parts, selected in indigo. Below, the parts show as a large summary; tapping one opens that part at the top. In rest-pause mini-sets, the rep shortcuts are low (2 to 6). A new drop comes with about 20% less load, rounded to the unit's step, and the same reps; a new mini-set repeats the load. Saving writes the set and its parts at once, with the pause on all of them but the last. The starting pause is the one from the last time the exercise had that type; with no history, 10 s for drop and 15 s for rest-pause.
+- **Set panel:** load and reps at full width (56 pt keys, 40 pt numbers), type, drops or rest-pause mini-sets, repeat the last one and rest; the rest bar stays visible in the panel.
+- **Setup (*Configurar*):** list of workouts grouped into "Vigentes" (current), "Programados" (scheduled) and "Encerrados" (ended). In a workout: name and validity (optional start and end) and the exercises, which are reordered in "Reordenar" and removed with a swipe. In an exercise: one row per set with the type badge, the type menu and − reps +, plus target rest, unit and notes. With unsaved changes, the back button becomes "Descartar" (discard) and "Salvar" (save) stays pinned at the bottom.
+- **History:** today's workout, while not finished, shows "em andamento" (in progress) in indigo instead of the volume change, which only shows after "Finalizar" (finish).
+- **Exercise notes:** shown on the workout screen, right below last time, with an info icon.

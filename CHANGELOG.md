@@ -6,6 +6,7 @@ What changed in Gimmy, newest first. Every commit adds a line here, under that d
 
 - Changelog created, with the history since the first version.
 - Changelog and README now in English.
+- CLAUDE.md and DESIGN.md now in English, like the rest of the repo.
 
 ## 2026-11-24
 
