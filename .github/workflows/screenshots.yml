@@ -62,7 +62,7 @@ jobs:
           git add docs/screenshots
           if git diff --cached --quiet; then echo "No changes"; exit 0; fi
           # Every commit adds a line to the changelog, this one included.
-          python3 .github/scripts/changelog.py "Prints do README atualizados."
+          python3 .github/scripts/changelog.py "README screenshots updated."
           git add CHANGELOG.md
           git commit -m "Update README screenshots"
           git pull --rebase origin "${GITHUB_REF_NAME}"

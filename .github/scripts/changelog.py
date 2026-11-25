@@ -2,7 +2,7 @@
 """Adds a line to CHANGELOG.md under today's date (São Paulo time).
 
 Newest day on top; within a day, lines stay in the order they were added.
-Usage: python3 .github/scripts/changelog.py "O que mudou, em uma frase."
+Usage: python3 .github/scripts/changelog.py "What changed, in one sentence."
 """
 import datetime
 import pathlib
