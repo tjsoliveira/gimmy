@@ -185,10 +185,36 @@ struct Template {
     var rows: [TemplateRow]
 }
 
+/// An exercise as shown before a workout starts.
 struct PlannedExercise: Identifiable {
     var id: Int
     var exercise: String
+    /// Series count: drop and rest-pause parts continue a series instead of adding one.
     var sets: Int
+    /// Every set the workout will get, in order.
+    var rows: [PreviewSet] = []
+    /// Never done before this day.
+    var firstTime = false
+}
+
+/// One set of the preview shown before a workout starts: what will be created, and the same series last time.
+struct PreviewSet: Identifiable, Equatable {
+    var id: Int
+    var serie: String
+    var kind: String
+    var reps: Int
+    /// The same series the last time the exercise was done; nil when it had no such series (or was never done).
+    var last: SetRow?
+}
+
+/// What logging a set leads to.
+enum AfterSet: Equatable {
+    /// Sets still to log: rest before the next one.
+    case rest
+    /// That was the last set of today's workout: no rest, and Finalizar opens.
+    case finish
+    /// Every set logged, in a workout already finalized or on another day (an edit): no rest, nothing opens.
+    case nothing
 }
 
 enum OneRM {
@@ -354,8 +380,22 @@ struct Ledger {
     }
 
     func lastSet(for x: SetRow) -> SetRow? {
-        guard let day = x.day, let p = previousDay(exercise: x.exercise, before: day) else { return nil }
-        return rows.first { $0.exercise == x.exercise && $0.day == p && $0.serie == x.serie && $0.isDone }
+        guard let day = x.day else { return nil }
+        return lastSet(exercise: x.exercise, serie: x.serie, before: day)
+    }
+
+    /// Series `serie` (3, 3.1) of the exercise the last time it was done before `day`.
+    func lastSet(exercise: String, serie: String, before day: String) -> SetRow? {
+        guard let p = previousDay(exercise: exercise, before: day) else { return nil }
+        return rows.first { $0.exercise == exercise && $0.day == p && $0.serie == serie && $0.isDone }
+    }
+
+    /// Once every set of the workout is logged, the last one ends it: no rest after it.
+    func afterSet(routine: String, day: String, today: String) -> AfterSet {
+        let list = rows.filter { $0.routine == routine && $0.day == day }
+        guard !list.isEmpty, list.allSatisfy(\.isDone) else { return .rest }
+        let finalized = list.contains { $0.duration != nil }
+        return day == today && !finalized ? .finish : .nothing
     }
 
     // MARK: Progress
@@ -405,18 +445,26 @@ struct Ledger {
 
     // MARK: Sessions
 
-    /// Exercises and set counts shown before a workout starts; drop and rest-pause sets don't count as new sets.
-    func plannedExercises(_ t: Template) -> [PlannedExercise] {
+    /// The exercises a workout on `day` gets from template `t`, shown before it starts: each set numbered as the
+    /// sheet will number it, with the same series last time. Drop and rest-pause parts don't count as new sets.
+    func plannedExercises(_ t: Template, day: String) -> [PlannedExercise] {
         var out: [PlannedExercise] = []
-        var previousKind = ""
         for x in t.rows {
-            if var last = out.last, last.exercise == x.exercise {
-                if !SetKind.chains(previousKind) { last.sets += 1 }
-                out[out.count - 1] = last
-            } else {
-                out.append(PlannedExercise(id: out.count, exercise: x.exercise, sets: 1))
+            if out.last?.exercise != x.exercise {
+                out.append(PlannedExercise(id: out.count, exercise: x.exercise, sets: 0))
             }
-            previousKind = x.kind
+            let i = out.count - 1
+            out[i].rows.append(PreviewSet(id: out[i].rows.count, serie: "", kind: x.kind, reps: x.reps))
+        }
+        for i in out.indices {
+            let exercise = out[i].exercise
+            let labels = Series.labels(out[i].rows.map(\.kind))
+            out[i].sets = labels.filter { !$0.contains(".") }.count
+            out[i].firstTime = previousDay(exercise: exercise, before: day) == nil
+            for j in out[i].rows.indices {
+                out[i].rows[j].serie = labels[j]
+                out[i].rows[j].last = lastSet(exercise: exercise, serie: labels[j], before: day)
+            }
         }
         return out
     }

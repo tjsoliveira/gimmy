@@ -2,6 +2,10 @@
 
 What changed in Gimmy, newest first. Every commit adds a line here, under that day's date.
 
+## 2026-11-28
+
+- Before starting, the workout screen shows every set of each exercise (type, target reps and last time), and logging the workout's last set opens Finalizar instead of the rest timer.
+
 ## 2026-11-25
 
 - Changelog created, with the history since the first version.

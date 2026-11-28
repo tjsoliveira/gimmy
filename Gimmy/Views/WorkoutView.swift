@@ -43,7 +43,7 @@ struct WorkoutView: View {
         .sheet(item: Binding(
             get: { model.entry },
             set: { if $0 == nil { model.dismissEditor() } else { model.entry = $0 } }
-        )) { _ in SetEditorSheet() }
+        ), onDismiss: { model.editorClosed() }) { _ in SetEditorSheet() }
         .sheet(isPresented: $model.addingExercise) { AddExerciseSheet() }
         .sheet(isPresented: $model.finishing) { FinishSheet() }
         .alert("Descanso depois desta série", isPresented: Binding(
@@ -602,7 +602,7 @@ private struct SetActions: View {
 
 // MARK: - Start and notices
 
-/// Before the workout exists in the sheet: what will be created, and the button that creates it.
+/// Before the workout exists in the sheet: the button that creates it, and every set it will get.
 private struct StartCard: View {
     @Environment(AppModel.self) private var model
 
@@ -630,25 +630,7 @@ private struct StartCard: View {
                             .foregroundStyle(Color.textSecondary)
                     }
 
-                    VStack(spacing: 0) {
-                        let items = model.ledger.plannedExercises(template)
-                        ForEach(items) { item in
-                            HStack {
-                                Text(item.exercise)
-                                    .font(AppFont.body)
-                                    .foregroundStyle(Color.textPrimary)
-                                Spacer()
-                                Text("\(item.sets) \(item.sets == 1 ? "série" : "séries")")
-                                    .font(AppFont.number(13, weight: .semibold))
-                                    .foregroundStyle(Color.textSecondary)
-                            }
-                            .padding(.vertical, 10)
-                            if item.id != items.last?.id {
-                                Divider().overlay(Color.appBorder.opacity(0.4))
-                            }
-                        }
-                    }
-
+                    // Above the list, which can run long: starting never needs a scroll.
                     Button {
                         Task { await model.startSession() }
                     } label: {
@@ -659,10 +641,67 @@ private struct StartCard: View {
                     }
                     .buttonStyle(PrimaryButtonStyle())
                     .disabled(model.busy != nil)
+
+                    VStack(spacing: 0) {
+                        let items = model.ledger.plannedExercises(template, day: model.day)
+                        ForEach(items) { item in
+                            PlannedExerciseView(item: item)
+                                .padding(.vertical, Spacing.sm)
+                            if item.id != items.last?.id {
+                                Divider().overlay(Color.appBorder.opacity(0.4))
+                            }
+                        }
+                    }
                 }
                 .appCard()
             }
         }
+    }
+}
+
+/// One exercise of the start card: name and set count, then each set with its type, target reps and last time.
+private struct PlannedExerciseView: View {
+    let item: PlannedExercise
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(item.exercise)
+                    .font(AppFont.bodyBold)
+                    .foregroundStyle(Color.textPrimary)
+                Spacer(minLength: Spacing.xs)
+                Text("\(item.sets) \(item.sets == 1 ? "série" : "séries")")
+                    .font(AppFont.number(13, weight: .semibold))
+                    .foregroundStyle(Color.textSecondary)
+            }
+            ForEach(item.rows) { set in
+                let type = SetType(kind: set.kind)
+                HStack(spacing: 14) {
+                    SetBadge(label: set.serie, type: type, filled: false)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("\(set.reps) reps")
+                            .font(AppFont.number(15, weight: .semibold))
+                            .foregroundStyle(Color.textPrimary)
+                            .monospacedDigit()
+                        Text("\(type.rawValue) · \(note(set))")
+                            .font(.system(size: 10, weight: .bold))
+                            .tracking(0.5)
+                            .foregroundStyle(type.tintColor.opacity(0.85))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 8)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Série \(set.serie), \(type.title), \(set.reps) reps, \(note(set))")
+            }
+        }
+    }
+
+    private func note(_ set: PreviewSet) -> String {
+        if let last = set.last { return "última \(Fmt.set(last.load, last.reps))" }
+        return item.firstTime ? "1ª vez" : "sem essa série na última vez"
     }
 }
 

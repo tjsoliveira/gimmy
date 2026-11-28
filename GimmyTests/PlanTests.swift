@@ -176,7 +176,7 @@ final class PlanTests: XCTestCase {
             TemplateRow(exercise: "Row", kind: SetKind.drop, reps: 8),
             TemplateRow(exercise: "Row", kind: SetKind.normal, reps: 8),
         ])
-        XCTAssertEqual(l.plannedExercises(december).map(\.sets), [3])
+        XCTAssertEqual(l.plannedExercises(december, day: "2026-12-05").map(\.sets), [3])
         XCTAssertTrue(l.template(routine: "Ombro", day: "2026-11-20").rows.isEmpty)
         XCTAssertTrue(l.template(routine: "Ombro", day: "2026-10-20").rows.isEmpty, "not in force yet")
     }

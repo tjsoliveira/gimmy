@@ -6,8 +6,8 @@ An iPhone app (SwiftUI) for logging my workouts. The database is my workout spre
 
 ## What the app does
 
-- **Workout** (*Treino*): pick the workout (the picker only shows the ones in effect on that date) and the date. On a day with no workout yet, Start workout (*Começar treino*) creates a copy of the configured workout, with its exercises, set types and reps, leaving only the loads blank. Log each set (load, reps, type, unit, rest), add sets and exercises, and finish with the duration.
-- **Rest**: after logging a set, the rest timer shows up at the bottom. When it reaches the exercise's target (1:30 by default), the iPhone alerts with a notification and a sound, even when locked.
+- **Workout** (*Treino*): pick the workout (the picker only shows the ones in effect on that date) and the date. On a day with no workout yet, the screen shows every set the workout will get (type, target reps and the same set last time), and Start workout (*Começar treino*) creates that copy of the configured workout, leaving only the loads blank. Log each set (load, reps, type, unit, rest), add sets and exercises, and finish with the duration: logging the last set opens the Finish panel (*Finalizar*) on its own.
+- **Rest**: after logging a set (except the workout's last one), the rest timer shows up at the bottom. When it reaches the exercise's target (1:30 by default), the iPhone alerts with a notification and a sound, even when locked.
 - **History** (*Histórico*): workouts by month, with volume and the change against the previous workout, exercises that went up or down, and records. An old workout can be opened for editing.
 - **Setup** (*Configurar*): create and edit workouts. Each workout has a name and a validity period (start and end; the current one has no end), an ordered list of exercises and, for each exercise, its sets (type and reps), target rest, unit and notes. A name can come back with a different validity period (a new Back plan, for example) without mixing with the old one.
 

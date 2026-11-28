@@ -45,6 +45,8 @@ final class AppModel {
     var allCollapsed = false
     var addingExercise = false
     var finishing = false
+    /// The workout's last set was saved from the set editor: Finalizar opens once the editor has closed.
+    var finishAfterEditor = false
     /// A finished workout that differs from its routine: the app asks to make a new routine from it.
     var newRoutineOffer: NewRoutineOffer?
     var rest: RestState?
@@ -412,6 +414,9 @@ final class AppModel {
         var conflict = false
         var message = ""
         var restAnchor = x.row
+        // A sheet can't open while another is closing: from the editor, Finalizar waits for it (`editorClosed`).
+        let editorOpen = entry != nil
+        var finishNow = false
         let error = await perform(clear ? "Limpando…" : "Salvando…", write: true) {
             guard try await self.verify(x) else {
                 try await self.loadRegistro()
@@ -472,8 +477,16 @@ final class AppModel {
             }
 
             if !clear && (!wasDone || !parts.isEmpty) {
-                self.startRest(after: self.ledger.row(restAnchor) ?? saved)
                 let day = saved.day ?? self.day
+                switch self.ledger.afterSet(routine: saved.routine, day: day, today: DayKey.from(Date())) {
+                case .rest:
+                    self.startRest(after: self.ledger.row(restAnchor) ?? saved)
+                case .finish:
+                    self.dismissRest()
+                    if editorOpen { self.finishAfterEditor = true } else { finishNow = true }
+                case .nothing:
+                    self.dismissRest()
+                }
                 let clock = self.clockRecord(day: day, routine: saved.routine)
                 let next = SessionClock.Record.afterSetLogged(clock, now: Date())
                 if next != clock { self.setClock(next, day: day, routine: saved.routine) }
@@ -489,7 +502,15 @@ final class AppModel {
         if let error { return error }
         if !clear { advanceFocus(after: restAnchor) }
         show(message)
+        if finishNow { finishing = true }
         return nil
+    }
+
+    /// The set editor finished closing.
+    func editorClosed() {
+        guard finishAfterEditor else { return }
+        finishAfterEditor = false
+        finishing = true
     }
 
     /// Moves the series holding row `fromRow` to the place of the series holding `toRow`, in the same exercise.

@@ -151,7 +151,76 @@ final class LedgerTests: XCTestCase {
                        "A copies its logged sets from last time; B was never logged, so it uses Séries and Reps")
         XCTAssertEqual(t.rows.map(\.kind), ["", SetKind.drop, "", "", ""])
         XCTAssertEqual(t.rows.map(\.reps), [12, 8, 6, 12, 12])
-        XCTAssertEqual(l.plannedExercises(t).map(\.sets), [2, 2], "a drop part is not a new set")
+        XCTAssertEqual(l.plannedExercises(t, day: "2026-11-10").map(\.sets), [2, 2], "a drop part is not a new set")
+    }
+
+    func testPreviewShowsEverySetWithTheSameSeriesLastTime() {
+        let l = makeLedger(
+            registro: [
+                registroRow("03/11/2026", "Costas", "A", kind: SetKind.warmup, load: 20, reps: 15),
+                registroRow("03/11/2026", "Costas", "A", kind: SetKind.drop, load: 40, reps: 8),
+                registroRow("03/11/2026", "Costas", "A", load: 30, reps: 6),
+            ],
+            plan: [
+                planRow("Costas", order: 1, "A", reps: "15-10-8-6", kinds: "Aquecimento, Normal, Drop, Normal"),
+                planRow("Costas", order: 2, "B", reps: "12-12"),
+            ]
+        )
+        let items = l.plannedExercises(l.template(routine: "Costas", day: "2026-11-10"), day: "2026-11-10")
+        XCTAssertEqual(items.map(\.exercise), ["A", "B"], "in workout order: the first one is the first to do")
+
+        let a = items[0]
+        XCTAssertEqual(a.sets, 3)
+        XCTAssertFalse(a.firstTime)
+        XCTAssertEqual(a.rows.map(\.serie), ["1", "2", "3", "3.1"], "numbered as the sheet will number them")
+        XCTAssertEqual(a.rows.map(\.kind), [SetKind.warmup, SetKind.normal, SetKind.drop, SetKind.normal])
+        XCTAssertEqual(a.rows.map(\.reps), [15, 10, 8, 6])
+        XCTAssertEqual(a.rows.map { $0.last?.load }, [20, 40, nil, nil],
+                       "last time had series 1, 2 and 2.1: series 3 and 3.1 have nothing to show")
+        XCTAssertEqual(a.rows.map { $0.last?.reps }, [15, 8, nil, nil])
+
+        let b = items[1]
+        XCTAssertTrue(b.firstTime)
+        XCTAssertEqual(b.rows.map(\.serie), ["1", "2"])
+        XCTAssertTrue(b.rows.allSatisfy { $0.last == nil })
+    }
+
+    func testPreviewOnlyLooksBeforeTheDay() {
+        let l = makeLedger(
+            registro: [
+                registroRow("03/11/2026", "Costas", "A", load: 30, reps: 10),
+                registroRow("10/11/2026", "Costas", "A", load: 35, reps: 10),
+            ],
+            plan: [planRow("Costas", order: 1, "A", reps: "10")]
+        )
+        let t = l.template(routine: "Costas", day: "2026-11-10")
+        XCTAssertEqual(l.plannedExercises(t, day: "2026-11-10")[0].rows[0].last?.load, 30)
+        XCTAssertEqual(l.plannedExercises(t, day: "2026-11-17")[0].rows[0].last?.load, 35)
+    }
+
+    func testTheLastSetOfTodaysWorkoutLeadsToFinalizarWithoutRest() {
+        let today = "2026-11-28"
+        let pending = makeLedger(registro: [
+            registroRow("28/11/2026", "Pernas", "Squat", load: 60),
+            registroRow("28/11/2026", "Pernas", "Calf", load: nil),
+        ])
+        XCTAssertEqual(pending.afterSet(routine: "Pernas", day: today, today: today), .rest)
+
+        let done = makeLedger(registro: [
+            registroRow("28/11/2026", "Pernas", "Squat", load: 60),
+            registroRow("28/11/2026", "Pernas", "Calf", load: 30),
+            registroRow("28/11/2026", "Peito", "Press", load: nil),
+        ])
+        XCTAssertEqual(done.afterSet(routine: "Pernas", day: today, today: today), .finish,
+                       "another workout on the same day doesn't count")
+        XCTAssertEqual(done.afterSet(routine: "Pernas", day: today, today: "2026-11-29"), .nothing,
+                       "editing another day's workout opens nothing")
+
+        let finalized = makeLedger(registro: [
+            registroRow("28/11/2026", "Pernas", "Squat", load: 60, durationMinutes: 50),
+            registroRow("28/11/2026", "Pernas", "Calf", load: 30),
+        ])
+        XCTAssertEqual(finalized.afterSet(routine: "Pernas", day: today, today: today), .nothing, "already finalized")
     }
 
     func testOnlyTodaysUnfinishedWorkoutIsInProgress() {
